@@ -83,7 +83,7 @@ export default class Barra extends View {
     if (this.adopting) return;
     const all = terminals();
     const need = agents().map((a) => a.address).filter((addr) => {
-      if (this.tried.has(addr) || addr.includes("/")) return false;   // las de otra máquina no
+      if (this.tried.has(addr)) return false;   // las de otra máquina (omarchy/t28) también: hd_adopt sabe con ellas
       const t = all.find((x) => x.address === addr);
       return t && t.state === "live" && !t.labels?.["bk.id"];
     });

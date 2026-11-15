@@ -342,6 +342,8 @@ hd_id_give() {
 # claude o un codex sin etiquetas de bk) pasa a ser un chat de su proyecto (<proyecto>, <proyecto>-2…), así
 # bk ls, bk say, bk go y bk handoff andan con él igual que con los que abre bk chat. Y le da su número.
 # Imprime el número. No toca lo que no es un agente con pestaña (una shell, un popup, un subagente).
+# Vale también para el agente de otra máquina de Herdr (omarchy/t28): las etiquetas y los números se reparten
+# acá, así no se repiten entre máquinas.
 hd_adopt() {
   local t="$1" j kind dir top name ws
   j=$(hd_hc get "$t" --json 2>/dev/null) || return 1
@@ -352,8 +354,17 @@ hd_adopt() {
     "")
       [ -n "$(jq -r '.labels["herdr.tab"] // ""' <<<"$j")" ] || return 0
       [ -n "$(jq -r '.status.app // ""' <<<"$j")" ] || return 0
-      dir=$(jq -r '.cwd // ""' <<<"$j"); [ -d "$dir" ] || return 0
-      top=$(project_top "$dir"); name=$(project_of "$top")
+      dir=$(jq -r '.cwd // ""' <<<"$j")
+      case "$t" in
+        */*)   # de otra máquina (<máquina>/<t>): la carpeta es de allá, así que el proyecto se le pregunta a
+               # ella; si no tiene bk o no responde, el nombre de la carpeta
+          [ -n "$dir" ] || return 0
+          name=$(hd_hc exec --on "${t%%/*}" --timeout 8 bk _project "$dir" 2>/dev/null | head -1) || name=""
+          [ -n "$name" ] || name=$(basename "$dir" | tr '.:' '__') ;;
+        *)
+          [ -d "$dir" ] || return 0
+          top=$(project_top "$dir"); name=$(project_of "$top") ;;
+      esac
       ws="$name"; [ -z "$(hd_chat_term "$name")" ] || ws=$(hd_free "$name")
       hd_hc label "$t" bk.kind=chat "bk.win=$ws" "bk.project=$name" bk.adopted=1 >/dev/null 2>&1 || return 1 ;;
     *) return 0 ;;

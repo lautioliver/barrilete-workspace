@@ -109,8 +109,15 @@ pisan con los del repo (se editan acá).
   chat de su proyecto. Toma el nombre `<proyecto>` (o `<proyecto>-2`… si ya es de otro chat) y su número, y desde
   ahí `bk ls`, `say`, `go` y `handoff` andan con él como con los de `bk chat`. Solo se adopta una terminal viva,
   con pestaña y que informa estado de agente: una shell no se toca. Lo hace la barra de estado de `bk-lavanda`
-  cada 1,5 s, una vez por terminal y solo con las de esta máquina (`bk _adopt <terminal>`), y también
-  `bk handoff --term`.
+  cada 1,5 s, una vez por terminal (`bk _adopt <terminal>`), y también `bk handoff --term`.
+- **Otras máquinas** (`hc machine add <máquina>`): los agentes que corren en otra máquina de Herdr se ven y se
+  manejan desde acá. Su terminal tiene la dirección `<máquina>/<t>` y se adopta igual (el proyecto se le pregunta
+  a esa máquina; los números de ventana se reparten acá, así no se repiten). El estado lo anota el hook de allá:
+  bk lo trae con `hc exec --on <máquina> bk _states`, lo guarda 5 s (`BK_REMOTE_TTL`) y a una máquina que no
+  responde le vuelve a preguntar recién a los 30 s, con un tope de 4 s por consulta (`BK_REMOTE_TIMEOUT`).
+  Para eso la otra máquina necesita `bk` en el PATH con el backend en herdr y los hooks de Claude registrados.
+  `BK_REMOTE=0` lo apaga. Lo que depende de archivos de esa máquina todavía sale vacío para sus agentes: el
+  título del issue, los subagentes, las tareas y la cola de `bk say`.
 - **Todo con teclas**: `herdr/keys.json` se suma al `keys.json` de Herdr sin pisar las teclas que ya hacen otra
   cosa (dice cuáles quedaron ocupadas) y con respaldo en `keys.json.antes-de-bk`. Las que había puesto una versión
   anterior de bk y siguen igual se actualizan: `alt+1…9` iba al espacio N y ahora va a la ventana N; `alt+,` abría

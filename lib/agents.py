@@ -11,6 +11,7 @@
 Los chats de los workspaces (bk-kit-2…) también se nombran: por su nombre (bk name / bk chat --nombre),
 por el de /rename o por el título que les puso Claude. resolve los devuelve como chat:<sesión>.
   agents.py warm                 busca los títulos que falten (bk lo corre al lanzar un agente)
+  agents.py states               los estados de esta máquina en JSON (bk _states; lo pide otra máquina de Herdr)
 
 resolve/auto/pick imprimen la ventana en stdout. Si no pueden decidir salen con 3 (varios) o 4 (ninguno)
 y explican en stderr; con una terminal, resolve y auto abren el selector en vez de fallar.
@@ -310,8 +311,8 @@ def windows():
     return out
 
 
-def states():
-    """{pane: estado} de los archivos del hook."""
+def local_states():
+    """{pane: estado} de los archivos del hook de esta máquina."""
     out = {}
     try:
         names = os.listdir(STATE_DIR)
@@ -329,6 +330,69 @@ def states():
         p = st.get("pane") or ""
         if p and (p not in out or st.get("ts", 0) > out[p].get("ts", 0)):
             out[p] = st
+    return out
+
+
+# ---------- otras máquinas de Herdr (hc machine) ----------
+# Las terminales de otra máquina ya se ven desde acá (hc ls las trae con la dirección <máquina>/<t>), pero el
+# estado lo anota el hook de allá, en archivos de allá y con el pane sin la máquina (t9). Se le piden con
+# `hc exec --on <máquina> bk _states` y se suman como <máquina>/t9. Lo que depende de otros archivos de esa
+# máquina (títulos de issue, subagentes, tareas, la cola de bk say) queda vacío.
+REMOTE = os.path.join(os.environ.get("BK_CACHE_DIR", os.path.expanduser("~/.cache/bk")), "remote-states.json")
+REMOTE_TTL = float(os.environ.get("BK_REMOTE_TTL", "5"))    # segundos que vale lo que respondió una máquina
+REMOTE_RETRY = 30                                           # y lo que se espera para insistirle a una que no respondió
+REMOTE_TIMEOUT = os.environ.get("BK_REMOTE_TIMEOUT", "4")   # segundos: una máquina colgada no frena la barra
+
+
+def machines():
+    """Las otras máquinas de Herdr conectadas ahora."""
+    try:
+        ms = json.loads(sh(HC, "machine", "ls", "--json") or "{}").get("machines") or []
+    except ValueError:
+        return []
+    return [m["name"] for m in ms if m.get("name") and m.get("state") == "connected"]
+
+
+def remote_states():
+    """{<máquina>/<pane>: estado} de las otras máquinas, con una caché corta por máquina."""
+    if backend() != "herdr" or os.environ.get("BK_REMOTE") == "0":
+        return {}
+    try:
+        cache = json.load(open(REMOTE))
+    except (OSError, ValueError):
+        cache = {}
+    out, now, dirty = {}, time.time(), False
+    for m in machines():
+        c = cache.get(m) or {}
+        if not c or now - c.get("at", 0) >= (REMOTE_TTL if c.get("ok") else min(REMOTE_RETRY, REMOTE_TTL * 6)):
+            try:
+                got = json.loads(sh(HC, "exec", "--on", m, "--timeout", REMOTE_TIMEOUT, "bk", "_states",
+                                    timeout=float(REMOTE_TIMEOUT) + 2))
+                c = {"at": now, "ok": True, "states": [s for s in got if isinstance(s, dict)]}
+            except (ValueError, TypeError):   # apagada, sin bk o respondió otra cosa
+                c = {"at": now, "ok": False, "states": []}
+            cache[m], dirty = c, True
+        for st in c.get("states") or []:
+            p = st.get("pane") or ""
+            if p and "/" not in p:
+                st = dict(st, pane=f"{m}/{p}", _machine=m)
+                if st["pane"] not in out or st.get("ts", 0) > out[st["pane"]].get("ts", 0):
+                    out[st["pane"]] = st
+    if dirty:
+        try:
+            os.makedirs(os.path.dirname(REMOTE), exist_ok=True)
+            tmp = f"{REMOTE}.{os.getpid()}"
+            json.dump(cache, open(tmp, "w"), ensure_ascii=False)
+            os.replace(tmp, REMOTE)
+        except OSError:
+            pass
+    return out
+
+
+def states():
+    """{pane: estado}: los de esta máquina y, con Herdr, los de las otras (pane <máquina>/<t>)."""
+    out = local_states()
+    out.update(remote_states())
     return out
 
 
@@ -574,6 +638,10 @@ def main():
             for d, _ in (found and [(d, j) for d, j in a["subs"] if (d, j) in found]) or a["subs"]:
                 sys.stderr.write(f"  └ {short(d, 70)}   (de {a.get('short') or a['win']})\n")
         sys.exit(3 if found else 4)
+
+    if cmd == "states":   # bk _states: los de esta máquina, para la que pregunta por hc exec --on
+        print(json.dumps(list(local_states().values()), ensure_ascii=False))
+        return
 
     if cmd == "warm":   # llenar la cache de títulos (lo corre bk después de lanzar un agente)
         gather(fetch_titles=True, look=False)

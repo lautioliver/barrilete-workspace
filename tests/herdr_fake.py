@@ -6,6 +6,9 @@ Guarda espacios, pestañas y terminales en $HD_FAKE/state.json y anota en $HD_FA
   $HD_FAKE/closed          si existe, la ventana está cerrada: herdr-app status / ls / do salen con 1
   $HD_FAKE/screen-<t>      lo que devuelve `hc read <t>`
   $HD_FAKE/fail-label      si existe, `hc label` falla (para probar que bk no deja un agente sin etiquetas)
+  $HD_FAKE/machines        las otras máquinas de `hc machine ls`, una por línea: <nombre> [estado]
+  $HD_FAKE/exec-<m>-<sub>  lo que imprime `hc exec --on <m> bk <sub> …`; si no está, la máquina no responde
+Una terminal de otra máquina es una entrada más de terms, con la dirección <máquina>/<t> (un test la agrega).
 """
 import json
 import os
@@ -141,6 +144,30 @@ def hc(args):
     if cmd == "send":
         log("hc send " + " ".join(rest))
         out({"started": True})
+    if cmd == "machine":   # hc machine ls: una máquina por línea en $HD_FAKE/machines ("pc" o "pc disconnected")
+        ms = []
+        try:
+            with open(os.path.join(FAKE, "machines")) as f:
+                for ln in f:
+                    p = ln.split()
+                    if p:
+                        ms.append({"name": p[0], "state": p[1] if len(p) > 1 else "connected"})
+        except OSError:
+            pass
+        out({"machines": ms})
+    if cmd == "exec":   # hc exec --on <m> <programa> <sub> …: imprime $HD_FAKE/exec-<m>-<sub>; si no está, falla
+        a, on = list(args[1:]), ""
+        while a and a[0].startswith("--"):
+            if a[0] == "--on":
+                on = a[1]
+            a = a[1:] if a[0] in ("--json", "--stdin") else a[2:]
+        log("hc exec --on %s %s" % (on, " ".join(a)))
+        try:
+            with open(os.path.join(FAKE, "exec-%s-%s" % (on, a[1] if len(a) > 1 else ""))) as f:
+                sys.stdout.write(f.read())
+        except OSError:
+            sys.exit(1)
+        sys.exit(0)
     if cmd == "kill":
         if rest[0] not in st["terms"]:
             sys.exit(1)

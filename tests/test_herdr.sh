@@ -406,5 +406,39 @@ bk handoff --term t3 --cerrar >/dev/null 2>&1; pedido t3 sidD; touch -t 20200101
 bk handoff --listo sidD >/dev/null 2>&1
 check_eq "$(log | grep -c '^app do tab.new') $(log | grep -c '^hc kill t3')" "1 0" "handoff --listo: una marca de hace más de media hora no cierra nada"
 
+# --- otras máquinas de Herdr (hc machine): sus agentes se ven y se manejan desde acá ---
+# La terminal de un agente de la máquina pc tiene la dirección pc/t9; su hook anota el estado allá, con el pane
+# t9. bk los trae con `hc exec --on pc bk _states` y los suma como pc/t9.
+rm -f "$STATE"/*.json; export BK_REMOTE_TTL=0
+echo '{"pane": "t2", "state": "working", "ts": 5}' >"$STATE/local.json"
+check_eq "$(bk _states | jq -c '[.[] | [.pane, .state, ._sid]]')" '[["t2","working","local"]]' "bk _states: los estados de esta máquina, con su sesión"
+fst '.terms["pc/t9"] = {"labels": {"bk.kind": "agent", "bk.win": "i50", "herdr.tab": "tbx", "herdr.space": "spx"}, "cwd": "/home/pc/otro", "argv": ["claude"]}'
+echo pc >"$HD_FAKE/machines"
+echo '[{"pane": "t9", "state": "waiting", "wait": "permission", "ts": 5, "_sid": "allá"}]' >"$HD_FAKE/exec-pc-_states"
+check_eq "$(bk ls 2>/dev/null | grep -c 'i50 .*pide permiso')" "1" "otra máquina: bk ls muestra el estado de un agente de allá"
+check_eq "$(bk _states | jq -r '[.[].pane] | join(" ")')" "t2" "bk _states: no repite lo de otras máquinas"
+echo '[{"pane": "t9", "state": "working", "ts": 5}]' >"$HD_FAKE/exec-pc-_states"
+check_eq "$(bk ls 2>/dev/null | grep -c 'i50 .*trabajando')" "1" "otra máquina: sin caché (BK_REMOTE_TTL=0) se vuelve a preguntar"
+rm -f "$HOME/.cache/bk/remote-states.json"; : >"$HD_FAKE/log"; BK_REMOTE_TTL=60 bk ls >/dev/null 2>&1; BK_REMOTE_TTL=60 bk ls >/dev/null 2>&1
+check_eq "$(log | grep -c '^hc exec --on pc bk _states')" "1" "otra máquina: sus estados se guardan un rato (no se le pregunta en cada bk ls)"
+rm -f "$HOME/.cache/bk/remote-states.json" "$HD_FAKE/exec-pc-_states"
+out=$(bk ls 2>/dev/null); check_eq "$? $(grep -c 'i50 .*sin estado' <<<"$out")" "0 1" "otra máquina que no responde: bk ls anda igual y su agente queda sin estado"
+echo 'pc disconnected' >"$HD_FAKE/machines"; : >"$HD_FAKE/log"; bk ls >/dev/null 2>&1
+check_eq "$(log | grep -c '^hc exec')" "0" "otra máquina desconectada: no se le pregunta"
+echo pc >"$HD_FAKE/machines"; : >"$HD_FAKE/log"; BK_BACKEND=tmux plain ls >/dev/null 2>&1
+check_eq "$(log | grep -c '^hc exec')" "0" "con tmux no se mira ninguna otra máquina"
+# adopción: el proyecto de un agente de otra máquina se resuelve allá (su carpeta no existe acá)
+fst '.terms["pc/t10"] = {"labels": {"herdr.tab": "tby", "herdr.space": "spx"}, "cwd": "/home/pc/cosa-wt/7", "argv": ["claude"], "status": {"app": "claude-code", "state": "idle"}}'
+echo cosa >"$HD_FAKE/exec-pc-_project"; : >"$HD_FAKE/log"
+n0=$(st -r '[.terms[].labels["bk.id"] // empty | tonumber] | max'); got=$(bk _adopt pc/t10 2>/dev/null)
+check_eq "$got $(st -r '.terms["pc/t10"].labels | .["bk.kind"] + " " + .["bk.project"] + " " + .["bk.win"] + " " + .["bk.id"]')" "$((n0 + 1)) chat cosa cosa $((n0 + 1))" "adopción de otra máquina: pasa a ser un chat de su proyecto, con un número que no repite los de acá"
+check_eq "$(log | grep -c '^hc exec --on pc bk _project /home/pc/cosa-wt/7')" "1" "adopción de otra máquina: el proyecto se le pregunta a esa máquina"
+fst '.terms["pc/t11"] = {"labels": {"herdr.tab": "tbz", "herdr.space": "spx"}, "cwd": "/home/pc/sin.bk", "argv": ["claude"], "status": {"app": "claude-code", "state": "idle"}}'
+rm -f "$HD_FAKE/exec-pc-_project"; bk _adopt pc/t11 >/dev/null 2>&1
+check_eq "$(st -r '.terms["pc/t11"].labels | .["bk.project"] + " " + .["bk.win"]')" "sin_bk sin_bk" "adopción de otra máquina sin bk: el proyecto es el nombre de la carpeta"
+check_eq "$(bk _project "$TMP/proj-wt/7")" "proj" "bk _project: el proyecto de una carpeta (el repo principal si es un worktree)"
+check_eq "$(grep -c 'addr.includes("/")' "$ROOT/herdr/mods/barra/main.js")" "0" "la barra de Herdr también manda a adoptar los agentes de otras máquinas"
+unset BK_REMOTE_TTL
+
 echo "1..$N"
 [ "$FAILED" -eq 0 ]

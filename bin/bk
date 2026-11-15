@@ -1811,6 +1811,10 @@ case "${1:-}" in
   _subagents)  shift; exec python3 "$WS/lib/herdr_subagents.py" "$@" ;;
   _tasks)      shift; exec python3 "$WS/lib/herdr_tasks.py" "$@" ;;   # bk tasks --json con el título de cada issue o PR (herdr/mods/tareas)
   _adopt)      shift; hd_adopt "${1:?bk _adopt <terminal>}" ;;   # la barra de Herdr: que bk conozca esa terminal y le dé su número
+  # Lo que otra máquina de Herdr le pregunta a esta (hc exec --on <máquina> bk …): los estados de sus agentes
+  # (lib/agents.py) y el proyecto de una carpeta (hd_adopt)
+  _states)     exec python3 "$WS/lib/agents.py" states ;;
+  _project)    project_of "${2:?bk _project <carpeta>}" ;;
   _side)       shift; exec python3 "$WS/lib/herdr_side.py" "$@" ;;   # los datos del panel derecho en Herdr (herdr/mods/lado)
   _notice)     [ "$BACKEND" = herdr ] && hd_notice "${2:?bk _notice <título> <texto> [nivel]}" "${3:-}" "" "${4:-info}" || true ;;   # un aviso de Herdr (la limpieza de ramas)
   _hub)        shift; [ "$DRY" -eq 0 ] || export BK_DRY=1   # bk --dry-run _hub session-go: dice qué haría y no toca Herdr
