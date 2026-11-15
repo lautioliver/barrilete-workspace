@@ -257,6 +257,19 @@ jq 'del(.global["alt-g"])' "$TMP/keys.despues" >"$APP/keys.json"; bk backend her
 check_eq "$(jq -r '.global["alt-g"]' "$APP/keys.json") $(cat "$APP/keys.json.antes-de-bk")" "mod.open:bk-changes otra" "atajos: repone una tecla que falta y no pisa el primer respaldo"
 echo '{roto' >"$APP/keys.json"; bk backend herdr >/dev/null 2>&1
 check_eq "$(cat "$APP/keys.json")" "{roto" "atajos: un keys.json inválido no se toca"
+# Teclas propias (~/.config/bk/keys.json): con la forma de herdr/keys.json, mandan sobre las del repo. Un null
+# saca la tecla (en un teclado español alt+1, alt+2 y alt+3 escriben |, @ y #) y una acción en otra tecla la muda
+mkdir -p "$HOME/.config/bk"
+printf '{"global": {"alt-1": null, "alt-2": null, "alt-3": null, "ctrl-alt-2": "mod.open:bk-go2"}}\n' >"$HOME/.config/bk/keys.json"
+printf '{"global": {"alt-1": "mod.open:bk-go1", "alt-3": "tab.close"}}\n' >"$APP/keys.json"
+out=$(bk backend herdr 2>&1)
+check_eq "$(jq -r '(.global["alt-2"] // "sin") + " " + .global["ctrl-alt-2"] + " " + .global["alt-4"]' "$APP/keys.json")" "sin mod.open:bk-go2 mod.open:bk-go4" "teclas propias: un null no instala esa tecla, otra tecla toma su acción y las demás quedan como en el repo"
+check_eq "$(jq -r '(.global["alt-1"] // "sin") + " " + .global["alt-3"]' "$APP/keys.json")" "sin tab.close" "teclas propias: un null saca la tecla que bk ya había instalado, y no una que hace otra cosa"
+check_eq "$([ -f "$APP/mods/bk-go1/main.js" ] && [ -f "$APP/mods/bk-go2/main.js" ] && echo si) $(has "$out" "teclas propias: 4")" "si si" "teclas propias: el mod de una tecla sacada se instala igual (lo abre la paleta) y dice cuántas son"
+cp "$APP/keys.json" "$TMP/keys.propias"; echo '{roto' >"$HOME/.config/bk/keys.json"
+out=$(bk backend herdr 2>&1)
+check_eq "$(cmp -s "$TMP/keys.propias" "$APP/keys.json" && echo igual) $(has "$out" "no es JSON válido")" "igual si" "teclas propias: si el archivo no es JSON válido avisa y no toca las teclas (no instala las del repo)"
+rm -f "$HOME/.config/bk/keys.json"
 
 # Los paneles de bk y su layout, uno solo (bk-lavanda): sigue al repo mientras no lo retoques
 rm -rf "$APP/mods" "$APP/layouts"; mkdir -p "$APP/layouts"; echo '{}' >"$APP/keys.json"

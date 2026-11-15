@@ -114,7 +114,12 @@ pisan con los del repo (se editan acá).
 - **Todo con teclas**: `herdr/keys.json` se suma al `keys.json` de Herdr sin pisar las teclas que ya hacen otra
   cosa (dice cuáles quedaron ocupadas) y con respaldo en `keys.json.antes-de-bk`. Las que había puesto una versión
   anterior de bk y siguen igual se actualizan: `alt+1…9` iba al espacio N y ahora va a la ventana N; `alt+,` abría
-  los ajustes de Herdr y ahora abre Aspecto. Herdr deja de actualizar un `keys.json` editado. Una tecla no puede
+  los ajustes de Herdr y ahora abre Aspecto. Herdr deja de actualizar un `keys.json` editado. **Teclas propias**:
+  `~/.config/bk/keys.json`, con la forma de `herdr/keys.json`, manda sobre las del repo. Una acción pone esa
+  tecla y `null` la saca: no se instala y, si bk ya la había puesto, se va (una tuya queda). Sirve en un teclado
+  donde `alt+…` escribe algo: en el español, `alt+1`, `alt+2` y `alt+3` son `|`, `@` y `#`
+  (`{"global": {"alt-2": null, "ctrl-alt-2": "mod.open:bk-go2"}}`). El mod de una tecla sacada se instala igual
+  y `alt+k` lo sigue abriendo. Si el archivo no es JSON válido, bk avisa y no toca las teclas. Una tecla no puede
   correr un programa ni pasar argumentos: abre un mod por su nombre (`mod.open:bk-issues`). Por eso hay dos
   paquetes, cada uno copiado a una carpeta por tecla:
   - `herdr/mods/hub/` → `mods/bk-<vista>`: los paneles, dibujados por Herdr (no son terminales). Es el mismo

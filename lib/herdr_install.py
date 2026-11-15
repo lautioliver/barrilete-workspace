@@ -9,6 +9,10 @@ El mod se copia a mods/bk-<comando>, una carpeta por tecla. Las teclas se suman 
 queda como está y se avisa. Antes del primer cambio guarda keys.json.antes-de-bk (una sola vez). Herdr deja de
 actualizar un keys.json editado: sus atajos nuevos habrá que sumarlos a mano. Imprime qué hizo; correrlo de
 nuevo no cambia nada.
+
+Teclas propias: ~/.config/bk/keys.json (o BK_KEYS), con la forma de herdr/keys.json, manda sobre las del repo.
+Una acción pone esa tecla; null la saca: no se instala y, si bk ya la había puesto, se va. Sirve para un teclado
+donde alt+… escribe algo (en el español, alt+1, alt+2 y alt+3 son |, @ y #).
 """
 import filecmp, hashlib, json, os, shutil, sys
 
@@ -186,6 +190,26 @@ def layout(src, home):
     print(f"layout {LAYOUT}: {what}" + (" (vista previa actualizada)" if drawn and what == "al día" else ""))
 
 
+def own_keys():
+    """Las teclas propias: ({sección: {tecla: acción | None}}, ruta). Sin archivo, {}; si no se puede leer o no
+    tiene esa forma, None: las teclas no se tocan (instalar las del repo pisaría lo que el archivo quería evitar)."""
+    path = os.environ.get("BK_KEYS") or os.path.expanduser("~/.config/bk/keys.json")
+    try:
+        mine = json.load(open(path))
+    except FileNotFoundError:
+        return {}, path
+    except (OSError, ValueError):
+        return None, path
+    ok = isinstance(mine, dict) and all(isinstance(b, dict) and all(a is None or isinstance(a, str) for a in b.values())
+                                        for b in mine.values())
+    return (mine if ok else None), path
+
+
+def is_ours(action, key):
+    """Una tecla que puso bk (esta versión o una anterior), no una elección tuya."""
+    return isinstance(action, str) and (action.startswith("bk.") or action.startswith("mod.open:bk-") or action == MOVED.get(key))
+
+
 def main():
     src, home = sys.argv[1], sys.argv[2]
     if not os.path.isdir(home):
@@ -193,8 +217,11 @@ def main():
     want = json.load(open(os.path.join(src, "keys.json")))
     # Una carpeta por comando (mods/bk-<comando>), todas con el mismo mod: una tecla abre un mod por su nombre
     # y no puede pasarle argumentos. mods/bk era la versión con una copia siempre abierta: se va.
+    # Los mods salen de las teclas del repo y de las propias: el de una tecla sacada se instala igual (la paleta lo abre)
+    mine, mine_path = own_keys()
     views = hub(src, home)
-    names = sorted(({a.split(":", 1)[1] for b in want.values() for a in b.values() if isinstance(a, str) and a.startswith("mod.open:bk-")} | set(NO_KEY)) - views)
+    names = sorted(({a.split(":", 1)[1] for b in list(want.values()) + list((mine or {}).values()) for a in b.values()
+                     if isinstance(a, str) and a.startswith("mod.open:bk-")} | set(NO_KEY)) - views)
     mod, copied = os.path.join(src, "mods", "bk"), 0
     for name in names:
         dst = os.path.join(home, "mods", name)
@@ -217,12 +244,21 @@ def main():
         print("teclas: no hay keys.json (abrí Herdr una vez y repetí)"); return 1
     except ValueError as e:
         print(f"teclas: keys.json no es JSON válido, no lo toco ({e})"); return 1
-    added, taken = [], []
+    if mine is None:
+        print(f"teclas: {mine_path} no es JSON válido con la forma de herdr/keys.json, no toco las teclas"); return 1
+    added, taken, gone = [], [], []
+    for section, binds in mine.items():
+        for key, action in binds.items():
+            if action is not None:
+                want.setdefault(section, {})[key] = action
+                continue
+            want.get(section, {}).pop(key, None)
+            if is_ours(keys.get(section, {}).get(key), key):   # la había puesto bk: se va; una tuya queda
+                del keys[section][key]; gone.append(key)
     for section, binds in want.items():
         have = keys.setdefault(section, {})
         for key, action in binds.items():
-            ours = isinstance(have.get(key), str) and (have[key].startswith("bk.") or have[key].startswith("mod.open:bk-")
-                                                       or have[key] == MOVED.get(key))
+            ours = is_ours(have.get(key), key)
             if key not in have or (ours and have[key] != action):   # las de una versión anterior de bk se actualizan
                 have[key] = action; added.append(key)
             elif have[key] != action:
@@ -230,7 +266,7 @@ def main():
     stale = [(b, k) for b in keys.values() for k, a in b.items() if a == "bk.last"]   # alt+0 de la versión anterior
     for b, k in stale:
         del b[k]
-    if added or stale:
+    if added or stale or gone:
         backup = path + ".antes-de-bk"
         if not os.path.exists(backup):
             shutil.copyfile(path, backup)
@@ -238,7 +274,10 @@ def main():
         with open(tmp, "w") as f:
             json.dump(keys, f, indent=2, ensure_ascii=False); f.write("\n")
         os.replace(tmp, path)
-    print(f"teclas: {len(added)} nuevas o actualizadas" + (f", {len(taken)} ocupadas: " + ", ".join(taken) if taken else ""))
+    print(f"teclas: {len(added)} nuevas o actualizadas" + (f", {len(gone)} sacadas" if gone else "")
+          + (f", {len(taken)} ocupadas: " + ", ".join(taken) if taken else ""))
+    if mine:
+        print(f"teclas propias: {sum(len(b) for b in mine.values())} ({mine_path})")
     return 0
 
 
