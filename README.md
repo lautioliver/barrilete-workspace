@@ -249,6 +249,27 @@ teclas de comandos y de la hoja de teclas. La cuenta es la de Claude de la termi
 `.claude.json`, sin preguntarle a Claude) y, si no es la de siempre, el nombre de `bk account` delante; el panel
 derecho muestra lo mismo. La marca de estado es la misma en todos, con los colores `blocked`, `done` y `working`
 del tema: en `bk-neon`, ámbar te espera, verde listo y rosa trabajando.
+
+**Espacios en carpetas.** La lista de espacios se ordena a mano y se agrupa en carpetas de un nivel. El botón de
+carpeta del rótulo `ESPACIOS` crea una; arrastrar una fila la cambia de lugar (la línea dice dónde cae) y soltarla
+sobre una carpeta la mete adentro (sobre la suya, la saca). Lo mismo está en el clic derecho, sin mouse: `Mover a…`,
+`Subir`, `Bajar`, y en una carpeta `Nombre, color e imagen…` y `Borrar la carpeta` (no cierra nada: sus espacios
+quedan sueltos). Un clic en la carpeta la pliega; plegada muestra lo más urgente de adentro y no esconde el espacio
+que estás mirando. Cada carpeta y cada espacio puede tener color (una muestra del tema o un `#rrggbb`; el espacio
+usa el de su carpeta si no eligió uno) e imagen: en el diálogo, soltá el archivo o pegá su ruta (png, jpg, webp o
+svg, hasta 1 MB); `bk _logo` la copia a `mods/bk-agentes/logos/` de Herdr, que es de donde Herdr muestra imágenes.
+- Un espacio se recuerda por su nombre, no por su id: bk abre siempre `<proyecto>` para un proyecto, así que
+  cerrarlo y reabrirlo conserva lugar, color e imagen. Renombrarlo también.
+- Un espacio nuevo cae debajo del de su proyecto (la etiqueta `bk.project` de sus terminales), en su carpeta: el
+  worktree de una rama queda con su proyecto. Si no hay ninguno, va suelto al final.
+- Uno cerrado que acomodaste en una carpeta sigue ahí, apagado: un clic lo reabre (`bk open` en su carpeta) y
+  `Quitar de la lista` lo olvida. Los que nunca tocaste se olvidan solos al cerrarse.
+- El orden de Herdr sigue al de la lista (`space.move`): `space.next`/`space.prev` y los agentes "por espacio" van
+  como los ves. Cada máquina queda en su bloque, como en Herdr.
+- El estado es un solo valor de Herdr, `shared` `bk.espacios` (en su `shared.json`); las carpetas plegadas, del
+  panel. Las reglas están en `herdr/mods/agentes/espacios.js` (sin dibujo; el menú lleva su copia), la lista en
+  `lista.js` y el diálogo en `editar.js`. Tests: `tests/test_espacios.sh` (necesita `node`): el modelo, la lista y
+  el diálogo con un Herdr falso que hace de mouse, y `bk _logo`. Lo que no prueba: arrastrar dentro de la app.
 El layout nombra un par de temas, `bk-neon` con la apariencia oscura y `bk-dia` con la clara, y la fuente de la
 interfaz, SF Mono; la
 de la terminal es la tuya (`alt+,` la cambia, y también el tema, el tamaño y qué paneles se ven).

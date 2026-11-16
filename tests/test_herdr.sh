@@ -287,6 +287,8 @@ check_eq "$sin_mod$(jq -r '[.. | objects | .content?.mod? // empty | select(star
 KITS=$(cd "$ROOT/herdr/mods" && for d in *; do [ "$d" = hub ] || [ ! -f "$d/kit.js" ] || printf '%s ' "$d"; done)
 distintos=$(for m in $KITS; do cmp -s "$ROOT/herdr/mods/agentes/kit.js" "$ROOT/herdr/mods/$m/kit.js" || printf '%s ' "$m"; done)
 check_eq "$KITS| $distintos" "agentes cabecera lado marca pestanas | " "kit.js: las copias de agentes, cabecera, lado, marca y pestanas son el mismo archivo"
+# La lista de espacios en carpetas: lo suyo se instala con cada mod (el modelo va en los dos que lo usan)
+check_eq "$(for f in bk-agentes/lista.js bk-agentes/editar.js bk-agentes/espacios.js bk-menu/espacios.js bk-menu/chevron-up.svg; do [ -f "$APP/mods/$f" ] || printf '%s ' "$f"; done)$(cmp -s "$APP/mods/bk-agentes/espacios.js" "$APP/mods/bk-menu/espacios.js" && echo igual)" "igual" "espacios: la lista, su diálogo, el modelo (en agentes y en el menú) y el icono de Subir se instalan"
 sin_kit=$(grep -l 'from "./kit.js"' "$ROOT"/herdr/mods/*/main.js | while read -r f; do m=$(basename "$(dirname "$f")"); [ "$m" = hub ] || cmp -s "$ROOT/herdr/mods/$m/kit.js" "$APP/mods/bk-$m/kit.js" || printf '%s ' "$m"; done)
 check_eq "$(grep -l 'from "./kit.js"' "$ROOT"/herdr/mods/*/main.js | grep -vc '/hub/') $sin_kit" "5 " "kit.js: cada panel que lo importa lo tiene instalado en su carpeta"
 # Los temas de bk: se instalan, siguen al repo mientras nadie los retoque y no pisan uno tuyo

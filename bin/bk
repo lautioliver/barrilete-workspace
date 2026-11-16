@@ -1812,6 +1812,7 @@ case "${1:-}" in
   _tasks)      shift; exec python3 "$WS/lib/herdr_tasks.py" "$@" ;;   # bk tasks --json con el título de cada issue o PR (herdr/mods/tareas)
   _adopt)      shift; hd_adopt "${1:?bk _adopt <terminal>}" ;;   # la barra de Herdr: que bk conozca esa terminal y le dé su número
   _side)       shift; exec python3 "$WS/lib/herdr_side.py" "$@" ;;   # los datos del panel derecho en Herdr (herdr/mods/lado)
+  _logo)       shift; exec python3 "$WS/lib/espacios.py" logo "$@" ;;   # la imagen de una carpeta o un espacio de la barra de Herdr, adonde Herdr la muestra
   _notice)     [ "$BACKEND" = herdr ] && hd_notice "${2:?bk _notice <título> <texto> [nivel]}" "${3:-}" "" "${4:-info}" || true ;;   # un aviso de Herdr (la limpieza de ramas)
   _hub)        shift; [ "$DRY" -eq 0 ] || export BK_DRY=1   # bk --dry-run _hub session-go: dice qué haría y no toca Herdr
                exec python3 "$WS/lib/herdr_hub.py" "$@" ;;   # los datos de los paneles nativos de Herdr, un JSON por tema (herdr/mods/hub)

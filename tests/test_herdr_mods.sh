@@ -191,11 +191,14 @@ ok('Aspecto: la fuente sigue guardándose igual');
 // El menú del clic derecho de bk (herdr/mods/menu → bk-menu)
 const menuSrc = fs.readFileSync(`${root}/herdr/mods/menu/main.js`, 'utf8')
   .replace(/^import .*;$/gm, '').replace('export default class Menu', 'class Menu').replace(/^export /gm, '');
-let mTerms = [], mPanes = [], mKeys = [], opened = [];
+let mTerms = [], mPanes = [], mKeys = [], opened = [], mSpaces = [], store = {};
+// El modelo de la lista de espacios (espacios.js), que el menú importa de su carpeta
+fs.copyFileSync(`${root}/herdr/mods/menu/espacios.js`, `${home}/espacios.mjs`);
+const E = await import(`${home}/espacios.mjs`);
 const M = new Function('View', 'div', 'svg', 'v_flex', 'h_flex', 'run', 'props', 'closeOverlay', 'openOverlay', 'theme', 'keys',
-  'terminals', 'spaces', 'panes', 'exec', menuSrc + '\nreturn { items, height, shortcut, keyParts, openMenu, WIDTH };')(
+  'terminals', 'spaces', 'panes', 'exec', 'shared', 'setShared', 'E', menuSrc + '\nreturn { items, height, shortcut, keyParts, openMenu, arrange, WIDTH };')(
   class {}, () => ({}), () => ({}), () => ({}), () => ({}), () => {}, () => ({}), () => {}, (o) => opened.push(o), () => ({}),
-  () => mKeys, () => mTerms, () => [], () => mPanes, async () => ({ code: 1 }));
+  () => mKeys, () => mTerms, () => mSpaces, () => mPanes, async () => ({ code: 1 }), (k) => store[k] ?? null, (k, v) => { store[k] = v; }, E);
 mTerms = [{ address: 't1', labels: {} }, { address: 't2', parent: 't1', labels: { 'herdr.right-click': 'program' } }];
 mPanes = [{ pane: 'p1' }];
 const pane = M.items({ tab: 'pane', target: { pane: 'p1', terminal: 't1' } });
@@ -221,9 +224,53 @@ ok('menú: las teclas en símbolos (⌘ ⇧ D), solo las globales');
 M.openMenu('pane', { pane: 'p1', terminal: 't1' });
 assert.deepEqual([opened[0].mod, opened[0].width, opened[0].height], ['bk-menu', M.WIDTH, M.height(pane)]);
 const lay = JSON.parse(fs.readFileSync(`${root}/herdr/layouts/bk-lavanda.json`, 'utf8'));
-const users = ['agentes', 'pestanas'].map((m) => fs.readFileSync(`${root}/herdr/mods/${m}/main.js`, 'utf8'));
+const users = ['agentes/lista', 'pestanas/main'].map((m) => fs.readFileSync(`${root}/herdr/mods/${m}.js`, 'utf8'));
 assert.deepEqual([lay.terminal_menu, users.map((u) => u.includes('mod: "bk-menu"') && !u.includes('mod: "menu"'))], ['bk-menu', [true, true]]);
 ok('menú: el layout, la lista de agentes y las pestañas usan bk-menu, no el de Herdr');
+
+// El menú de la lista de espacios: carpetas, orden, color e imagen (el estado, en shared "bk.espacios")
+mSpaces = [{ id: 's', name: 'abra', folder: '/p/abra', machine: null }, { id: 'r', name: 'bk', folder: '/p/bk', machine: null }];
+store[E.KEY] = E.sync(E.clean(null), mSpaces);
+const draw = () => E.view(E.clean(store[E.KEY]), mSpaces).map((r) => (r.kind === 'carpeta' ? `${r.c.nombre}[${r.filas.map((f) => (f.s ? '' : '~') + f.key).join(' ')}]` : r.key)).join(' ');
+const spaceMenu = M.items({ tab: 'space', target: { id: 's' } }, 'main');
+assert.deepEqual(spaceMenu.map((x) => x[0]), ['Renombrar', 'Mover a…', 'Color e imagen…', 'Subir', 'Bajar', 'Worktree nuevo', 'Abrir un worktree', 'Cerrar']);
+assert.equal(M.height(M.items({ tab: 'space', target: { id: 's' } }, 'linked')), 12 + 9 * 32 + 9);
+assert.match(fs.readFileSync(`${root}/herdr/mods/agentes/lista.js`, 'utf8'), /space: 12 \+ 9 \* 32 \+ 9, closed: 12 \+ 3 \* 32 \+ 9, folder: 12 \+ 4 \* 32 \+ 9,/);
+ok('menú de un espacio: además de lo de Herdr, moverlo a una carpeta, su color e imagen, subir y bajar');
+opened = [];
+M.arrange({ op: 'nueva', ref: 'e:abra' });
+const fid = Object.keys(store[E.KEY].carpetas)[0];
+assert.deepEqual([draw(), opened[0].mod, opened[0].props], ['bk Carpeta nueva[abra]', 'bk-agentes', { editar: `c:${fid}` }]);
+ok('"Carpeta nueva…": crea la carpeta con ese espacio adentro y abre su diálogo para nombrarla');
+const mover = M.items({ tab: 'mover', target: { key: 'bk' } });
+assert.deepEqual(mover.map((x) => x[0]), ['Carpeta nueva', 'Carpeta nueva…']);
+assert.deepEqual(M.items({ tab: 'mover', target: { key: 'abra' } }).map((x) => x[0]), ['Carpeta nueva…', 'Sacar de la carpeta']);
+opened = [];
+M.arrange({ op: 'mover', ref: 'e:bk' });
+assert.deepEqual([opened[0].mod, opened[0].height, opened[0].props], ['bk-menu', M.height(mover), { tab: 'mover', target: { key: 'bk' } }]);
+M.arrange(mover[0][2]);
+assert.equal(draw(), 'Carpeta nueva[abra bk]');
+M.arrange({ op: 'subir', ref: 'e:bk' });
+assert.equal(draw(), 'Carpeta nueva[bk abra]');
+M.arrange({ op: 'sacar', ref: 'e:bk' });
+assert.equal(draw(), 'Carpeta nueva[abra] bk');
+M.arrange({ op: 'subir', ref: 'e:bk' });
+assert.equal(draw(), 'bk Carpeta nueva[abra]');
+ok('"Mover a…": lista las otras carpetas y del alto justo; mover, sacar, subir y bajar cambian la lista');
+const folderMenu = M.items({ tab: 'folder', target: { id: fid } });
+assert.deepEqual(folderMenu.map((x) => x[0]), ['Nombre, color e imagen…', 'Subir', 'Bajar', 'Borrar la carpeta']);
+assert.equal(M.height(folderMenu), 12 + 4 * 32 + 9);
+mSpaces = mSpaces.filter((x) => x.id !== 's');
+store[E.KEY] = E.sync(E.clean(store[E.KEY]), mSpaces);
+assert.equal(draw(), 'bk Carpeta nueva[~abra]');
+const closedMenu = M.items({ tab: 'closed', target: { key: 'abra' } });
+assert.deepEqual([closedMenu.map((x) => x[0]), M.height(closedMenu)], [['Color e imagen…', 'Mover a…', 'Quitar de la lista'], 12 + 3 * 32 + 9]);
+M.arrange(closedMenu[2][2]);
+assert.equal(draw(), 'bk Carpeta nueva[]');
+M.arrange(folderMenu[3][2]);
+assert.deepEqual([draw(), store[E.KEY].carpetas], ['bk', {}]);
+ok('carpeta y espacio cerrado: sus menús, del alto justo; quitar de la lista y borrar la carpeta');
+assert.ok(fs.existsSync(`${root}/herdr/mods/menu/chevron-up.svg`), 'el icono de Subir va con el mod');
 console.log(`1..${n}`);
 JS
 # La lista de agentes (herdr/mods/agentes): la antigüedad de la fila no va en una caja de ancho fijo. En 28 px

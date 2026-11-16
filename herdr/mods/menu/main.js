@@ -4,10 +4,14 @@
 // Lo usan el layout bk-lavanda ("terminal_menu": "bk-menu", el clic derecho en una terminal), la lista de agentes
 // (espacios y agentes) y las pestañas: props { tab: "pane" | "tab" | "space", target }. ↑/↓ mueven, Enter corre,
 // Esc cierra. Una opción es [texto, comando, args]; "worktree" abre el diálogo de worktrees de Herdr.
+// Las de la lista de espacios (carpetas, orden, color e imagen) llevan el comando "espacios" y cambian el estado de
+// espacios.js: tab "space" (un espacio abierto), "closed" (uno cerrado que quedó en su carpeta, target { key }),
+// "folder" (target { id }) y "mover" (a qué carpeta va un espacio, target { key }).
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec } from "herdr";
+import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec, shared, setShared } from "herdr";
+import * as E from "./espacios.js";
 
 export const WIDTH = 300;
 const ROW = 32, SEP = 9, PAD = 6;
@@ -28,9 +32,34 @@ async function checkout(folder, on) {
   return common.stdout.trim() === `${top.stdout.trim()}/.git` ? "main" : "linked";
 }
 
+// Las opciones de la lista de espacios para una referencia ("e:<clave>" o "c:<id>"): mover, aspecto, subir y bajar
+const placing = (ref) => [
+  ...(ref.startsWith("e:") ? [["Mover a…", "espacios", { op: "mover", ref }, "folder"]] : []),
+  [ref.startsWith("c:") ? "Nombre, color e imagen…" : "Color e imagen…", "espacios", { op: "aspecto", ref }, "square-pen"],
+  ["Subir", "espacios", { op: "subir", ref }, "mods/bk-menu/chevron-up"],
+  ["Bajar", "espacios", { op: "bajar", ref }, "chevron-down"],
+];
+
 export function items(p, git) {
   p = p ?? {};
   const tg = p.target ?? {};
+  if (p.tab === "closed") {
+    return [
+      ["Color e imagen…", "espacios", { op: "aspecto", ref: `e:${tg.key}` }, "square-pen"],
+      ["Mover a…", "espacios", { op: "mover", ref: `e:${tg.key}` }, "folder"],
+      ["Quitar de la lista", "espacios", { op: "quitar", key: tg.key }, "x"],
+    ];
+  }
+  if (p.tab === "folder") return [...placing(`c:${tg.id}`), ["Borrar la carpeta", "espacios", { op: "borrar", id: tg.id }, "x"]];
+  if (p.tab === "mover") {
+    const st = E.clean(shared(E.KEY)), ref = `e:${tg.key}`, now = E.folderOf(st, tg.key);
+    return [
+      ...st.raiz.filter((r) => r.startsWith("c:") && r.slice(2) !== now)
+        .map((r) => [st.carpetas[r.slice(2)].nombre, "espacios", { op: "a", ref, id: r.slice(2) }, "folder"]),
+      ["Carpeta nueva…", "espacios", { op: "nueva", ref }, "folder-plus"],
+      ...(now ? [["Sacar de la carpeta", "espacios", { op: "sacar", ref }, "x"]] : []),
+    ];
+  }
   if (p.tab === "pane") {
     const all = terminals();
     const term = all.find((t) => t.address === tg.terminal);
@@ -59,8 +88,10 @@ export function items(p, git) {
     ];
   }
   if (p.tab === "space") {
+    const key = E.keyFor(E.clean(shared(E.KEY)), spaces(), tg.id);
     return [
       ["Renombrar", "space.rename", { id: tg.id }, "square-pen"],
+      ...(key ? placing(`e:${key}`) : []),
       ...(git ? [["Worktree nuevo", "worktree", { space: tg.id, action: "new" }, "git-branch"],
         ["Abrir un worktree", "worktree", { space: tg.id, action: "open" }, "git-branch"]] : []),
       ...(git === "linked" ? [["Borrar este worktree", "worktree", { space: tg.id, action: "remove" }, "git-branch"]] : []),
@@ -70,8 +101,33 @@ export function items(p, git) {
   return [["Espacio nuevo", "space.new", {}, "plus"], ["Teclas", "app.help", {}, "terminal"]];
 }
 
-// Una raya antes de cerrar (lo que no tiene vuelta) y antes de "Clic derecho" (otra clase de cosa)
-const sepBefore = (list, i) => i > 0 && (list[i][1].endsWith(".close") || list[i][1] === "terminal.right_click");
+// Una raya antes de cerrar o borrar (lo que no tiene vuelta) y antes de "Clic derecho" (otra clase de cosa)
+const ends = (it) => it[1].endsWith(".close") || ["borrar", "quitar", "sacar"].includes(it[2]?.op);
+const sepBefore = (list, i) => i > 0 && (ends(list[i]) || list[i][1] === "terminal.right_click");
+
+// Una opción de la lista de espacios: cambia el estado (shared "bk.espacios") o abre lo que sigue
+export function arrange(a, open = openOverlay) {
+  const st = E.clean(shared(E.KEY));
+  const save = (next) => { if (next !== st) setShared(E.KEY, next); };
+  const edit = (ref) => open({ mod: "bk-agentes", kind: "popup", width: 340, height: ref.startsWith("c:") ? 318 : 268, props: { editar: ref } });
+  if (a.op === "aspecto") return edit(a.ref);
+  if (a.op === "mover") {
+    const target = { key: a.ref.slice(2) };
+    return open({ mod: "bk-menu", kind: "popup", width: WIDTH, height: height(items({ tab: "mover", target })), props: { tab: "mover", target } });
+  }
+  if (a.op === "nueva") {
+    const id = "c" + Date.now().toString(36);
+    save(E.move(E.createFolder(st, id, "Carpeta nueva"), a.ref, { dentro: id }));
+    return edit(`c:${id}`);
+  }
+  // Subir y bajar saltan lo que no se ve (un cerrado suelto), para que un paso sea un lugar a la vista
+  const sp = spaces(), seen = new Set(E.view(st, sp).flatMap((r) => (r.kind === "carpeta" ? [`c:${r.id}`, ...r.filas.map((f) => `e:${f.key}`)] : [`e:${r.key}`])));
+  if (a.op === "subir" || a.op === "bajar") return save(E.nudge(st, a.ref, a.op === "subir" ? -1 : 1, (r) => seen.has(r)));
+  if (a.op === "a") return save(E.move(st, a.ref, { dentro: a.id }));
+  if (a.op === "sacar") return save(E.move(st, a.ref, { despues: `c:${E.folderOf(st, a.ref.slice(2))}` }));
+  if (a.op === "quitar") return save(E.forget(st, a.key));
+  if (a.op === "borrar") return save(E.removeFolder(st, a.id));
+}
 
 // El alto justo para esas opciones
 export function height(list) {
@@ -110,14 +166,15 @@ export default class Menu extends View {
     const it = items(props(), this.git)[i];
     if (!it) return;
     closeOverlay(props()?.overlay);
-    if (it[1] === "worktree") openOverlay({ mod: "worktree", kind: "dialog", ...(it[2].action === "open" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: it[2] });
+    if (it[1] === "espacios") arrange(it[2]);
+    else if (it[1] === "worktree") openOverlay({ mod: "worktree", kind: "dialog", ...(it[2].action === "open" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: it[2] });
     else run(it[1], it[2]);
   }
 
   render() {
     const t = theme();
     const list = items(props(), this.git);
-    const danger = (it) => it[1].endsWith(".close") || it[2]?.action === "remove";
+    const danger = (it) => it[1].endsWith(".close") || it[2]?.action === "remove" || it[2]?.op === "borrar";
     return v_flex().id("bk-menu").track_focus(this.handle).size_full().min_h(0).p(PAD).bg(t.popover).text_size(12.5)
       .on_key_down((e, cx) => {
         if (e.key === "down") this.at = (this.at + 1) % list.length;
@@ -138,7 +195,7 @@ export default class Menu extends View {
             .hover((s) => s.bg(on ? t.selected : t.hover))
             .on_hover((h, cx) => { if (h && this.at !== i) { this.at = i; cx.notify(); } })
             .on_click(() => this.choose(i))
-            .child(svg(ICONS + it[3] + ".svg").size(14).flex_none().text_color(danger(it) ? color : on ? t.accent : t.muted))
+            .child(svg((it[3].includes("/") ? it[3] : ICONS + it[3]) + ".svg").size(14).flex_none().text_color(danger(it) ? color : on ? t.accent : t.muted))
             .child(div().flex_1().min_w(0).truncate().text_color(color).child(it[0]))
             .child(h_flex().flex_none().gap(3).children(caps.map((c) =>
               div().min_w(18).h(18).px(4).flex().items_center().justify_center().rounded(5).border_1().border_color(t.border)
