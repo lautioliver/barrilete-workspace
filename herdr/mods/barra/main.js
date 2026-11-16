@@ -1,5 +1,5 @@
-// La barra de abajo de bk en Herdr: dónde estás (proyecto, rama, cuenta), qué te espera, el uso de hoy, la radio
-// y las dos teclas que abren todo lo demás. Además lleva dos cosas que necesitan a alguien siempre despierto:
+// La barra de abajo de bk en Herdr: dónde estás (proyecto, rama, cuenta), qué te espera, el uso de hoy, el de cada
+// computadora (uso.js), la radio y las dos teclas que abren todo lo demás. Además lleva dos cosas que necesitan a alguien siempre despierto:
 //   · el rastro de pestañas (shared "bk.trail"), para que alt+0 vuelva a donde estabas
 //   · que bk conozca cada agente: uno abierto desde Herdr (sin etiquetas de bk) se adopta como chat de su
 //     proyecto y toma su número fijo de ventana (bk _adopt → hd_adopt en lib/herdr.sh)
@@ -7,7 +7,8 @@
 
 import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { exec, spaces, agents, terminals, focused, theme, run, keys, shared, setShared, home } from "herdr";
+import { exec, spaces, agents, terminals, focused, theme, run, keys, shared, setShared, home, machines } from "herdr";
+import * as U from "./uso.js";
 
 const EVERY = 10000;
 const GLYPH = { alt: "⌥", cmd: "⌘", ctrl: "⌃", shift: "⇧" };
@@ -63,12 +64,35 @@ export default class Barra extends View {
     };
     cx.spawn(load);
     cx.timer.every(EVERY, (cx) => cx.spawn(load));
+    // El uso de cada computadora
+    this.uso = {};        // máquina ("" = esta) → { cpu, mem, host, at }
+    this.reading = {};
+    this.usage(cx);
+    cx.timer.every(U.EVERY, (cx) => this.usage(cx));
     // De fondo y sin redibujar: el rastro y la adopción
     cx.timer.every(1500, (cx) => {
       this.trail();
       if ((focused()?.cwd || home()) !== this.cwd) cx.spawn(load);
       cx.spawn(async () => this.adopt());
     });
+  }
+
+  // CPU y memoria de esta máquina y de las conectadas: cada una a su ritmo, la que no contesta no frena a las demás
+  usage(cx) {
+    for (const m of U.targets(machines())) {
+      const k = m ?? "";
+      if (this.reading[k]) continue;
+      this.reading[k] = true;
+      cx.spawn(async (cx) => {
+        try {
+          const r = await exec("sh", ["-c", U.READ], { on: m, timeout: 6000 });
+          const u = r.code === 0 ? U.parse(r.stdout) : null;
+          if (u) this.uso[k] = { ...u, at: Date.now() };
+        } catch (_e) { /* no está: su lectura envejece y deja de mostrarse */ }
+        this.reading[k] = false;
+        cx.notify();
+      });
+    }
   }
 
   trail() {
@@ -138,6 +162,11 @@ export default class Barra extends View {
       .when(working > 0, (el) => el.child(seg("b-work", "bk-agents", "Agentes trabajando").child(mark(t, "working")).child(div().text_color(t.working).child(working + " trabajando"))))
       .when(esperan + done + working === 0, (el) => el.child(seg("b-quiet", "bk-agents", "Agentes").child(mark(t, "idle")).child(list.length + (list.length === 1 ? " agente" : " agentes"))))
       .when(d?.cost_today != null, (el) => el.child(seg("b-cost", "bk-stats", "Uso de hoy").child(div().text_color(t.dim).child("hoy")).child(human(d?.tokens_today ?? 0) + " · $" + (d?.cost_today ?? 0).toFixed(2))))
+      .children(U.rows(U.targets(machines()), this.uso, Date.now()).map((u) => seg("b-uso-" + u.key, null, `${u.name}: CPU ${u.cpu}% · memoria ${u.mem}%`)
+        .child(div().text_color(t.dim).child(U.short(u.name)))
+        .child(div().text_color(u.cpu >= U.HIGH ? t.blocked : t.muted).child(u.cpu + "%"))
+        .child(div().text_color(t.dim).child("·"))
+        .child(div().text_color(u.mem >= U.HIGH ? t.blocked : t.muted).child(u.mem + "%"))))
       .when(Boolean(d?.song?.playing), (el) => el.child(seg("b-song", "bk-song", "Radio").child(div().text_color(t.accent).child("♪")).child(div().max_w(180).truncate().child(d?.song?.title || d?.song?.station || "radio"))))
       .when(Boolean(d?.focus), (el) => el.child(seg("b-focus", null, "Foco").child(div().text_color(t.blocked).child("◷")).child((d?.focus?.label ?? "foco") + " " + (d?.focus?.left_min ?? 0) + " min")))
       .child(div().w(4))

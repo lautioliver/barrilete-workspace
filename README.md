@@ -244,7 +244,7 @@ eventos, en `~/.local/state/bk/tasks/<proyecto>/<id>/` (`task.json` y `events.js
 A la izquierda, la marca, los espacios y los agentes, cada uno con el chip de su número de ventana y su marca de
 estado; angosta queda en un riel con solo los chips. En el centro, las pestañas y los panes, cada pane con su
 cabecera (número, programa, qué hace, carpeta y rama). A la derecha, tres tarjetas: sesión, GitHub y cambios
-(`alt+.` las esconde). Abajo, la barra de estado: proyecto, rama, cuenta, qué te espera, uso de hoy, radio y las
+(`alt+.` las esconde). Abajo, la barra de estado: proyecto, rama, cuenta, qué te espera, uso de hoy, CPU y memoria de cada computadora, radio y las
 teclas de comandos y de la hoja de teclas. La cuenta es la de Claude de la terminal que mirás: su mail (de su
 `.claude.json`, sin preguntarle a Claude) y, si no es la de siempre, el nombre de `bk account` delante; el panel
 derecho muestra lo mismo. La marca de estado es la misma en todos, con los colores `blocked`, `done` y `working`
