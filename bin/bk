@@ -123,8 +123,8 @@ uso: bk [comando] [--dry-run]
   tokens            tokens del día y costo equivalente en API, por modelo y proyecto
   learn             registra desvíos de los agentes en Obsidian y propone lecciones
   lessons           lecciones por revisar (status: proposed) en el vault
-  learn effect      ¿las reglas aceptadas bajan los hallazgos que dicen evitar? antes/después por ronda de
-                    review (agents/efecto.md); las que no bajan, para reescribir o retirar
+  learn effect      ¿las reglas que aplica cada proyecto (rules.lock + .barrilete/rules/) bajan los hallazgos que
+                    dicen evitar? antes/después por ronda de review y fallos de su check (agents/efecto.md)
   song [género]     radio por género (techno, house, rock, reggaeton, cachengue) o tuya (bk song help)
   theme [day|night|auto]  tema de Ghostty: violeta pastel / violeta oscuro / según macOS
   font [sf|jetbrains|menlo]  tipografía de Ghostty: SF Mono / JetBrains Mono (la que trae) / Menlo

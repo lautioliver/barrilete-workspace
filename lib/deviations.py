@@ -334,7 +334,9 @@ def review_findings(body):
     return [re.sub(r"\s+", " ", i).strip() for i in items if i.strip()]
 
 
-CLASS_TAG = re.compile(r"^[\s*_]*\[([a-z][a-z0-9-]*)\]")
+# La etiqueta [clase] de review-pr, al principio del hallazgo. Puede venir en negrita o cursiva (**[x]**), en código
+# (`[x] archivo:línea`), o detrás del número de PR que agrega bk learn (#284: `[x] …`).
+CLASS_TAG = re.compile(r"^(?:\s*#\d+:)?[\s*_`]*\[([a-z][a-z0-9-]*)\]")
 CLASS_LABELS = {   # para mostrar (bk learn, el vault); el id es el de docs/agents/classes.yml del kit
     "pr-metadata": "metadatos del PR", "ci-claim": "afirmación sobre el CI", "undecided-decision": "decisión no aprobada",
     "test-cannot-fail": "test que no puede fallar", "stale-docs": "docs desactualizados",

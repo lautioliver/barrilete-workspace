@@ -319,9 +319,14 @@ e interrupciones (para leer en el resumen del día). Un patrón repetido ≥3 ve
 las que marcás `accepted` con su regla pasan a `agents/INDEX.md`, que Claude Code importa desde `~/.claude/CLAUDE.md`.
 `bk lessons` lista las que esperan revisión; también salen en `bk checkpoints` y en *Te esperan* de `bk monitor`.
 `bk learn` se corre a mano: lo corría cada ~2 minutos la barra de Sketchybar, que ya no está.
-`bk learn effect` mide si cada regla aceptada baja los hallazgos de review que dice evitar: hallazgos de su clase por
-ronda (y qué parte del total son) en los PRs abiertos antes y después de aceptarla. Escribe `agents/efecto.md`; las
-que dan *no baja* son para reescribir o retirar. Usa `accepted:` y `mide:` del frontmatter de la lección.
+`bk learn effect` mide si cada regla que aplica un proyecto baja los hallazgos de review que dice evitar (ADR-006 D10
+del kit). Las reglas son las `accepted` de barrilete-rules en el SHA del `.barrilete/rules.lock` de cada repo de
+`~/.config/bk/retros.json` (se clona una vez por SHA en `~/.cache/bk/rules/`) más las de `.barrilete/rules/`, según su
+`scope`; ya no lee las lecciones del vault. Por regla: hallazgos de sus `classes` por ronda (y qué parte del total
+son) en los PRs abiertos antes y después de `accepted`, y, si tiene `check`, cuántas corridas fallan según los eventos
+`check_run` de `.barrilete/learning/events.jsonl` (sin eventos: "sin datos"). Al final dice qué parte de los hallazgos
+cae en `other` y qué etiquetas usan las reviews que no están en `classes.yml`. Escribe `agents/efecto.md`; las que dan
+*no baja* son para pasar a check, reescribir o retirar (decide la persona). Tests: `tests/test_effect.sh`.
 
 ## Dotfiles
 - `dotfiles/tmux.conf` → `~/.config/tmux/tmux.conf`
