@@ -144,7 +144,7 @@ const root = process.argv[2];
 const load = (f, name) => fs.readFileSync(`${root}/herdr/mods/${f}/main.js`, 'utf8')
   .replace(/^import [\s\S]*?;$/gm, '').replace(`export default class ${name}`, `class ${name}`);
 const node = () => {
-  const n = { $id: null, $kids: [], $click: null, $tip: null, $color: [], $bg: [], $key: null, $hover: null };
+  const n = { $id: null, $kids: [], $click: null, $tip: null, $color: [], $bg: [], $key: null, $hover: null, $cut: false };
   const p = new Proxy(n, { get: (o, k) => {
     if (typeof k === 'string' && k.startsWith('$')) return o[k];
     if (k === 'then') return undefined;   // que await no lo tome por una promesa
@@ -158,6 +158,7 @@ const node = () => {
       else if (k === 'tooltip') o.$tip = a[0];
       else if (k === 'text_color') o.$color.push(a[0]);
       else if (k === 'bg') o.$bg.push(a[0]);
+      else if (k === 'truncate') o.$cut = true;
       return p;
     };
   } });
@@ -314,6 +315,7 @@ sharedE().nolaunch = { 'o/x': 'x tiene el kit 0.9.0: para lanzar agentes hace fa
 o = pop.render(cx);
 const tried = execs.length;
 assert.ok(!find(o, 'launch-o/x#5') && text(o).includes('no se puede lanzar') && text(find(o, 'epic-nolaunch')).join(' ').startsWith('x tiene el kit 0.9.0: para lanzar'), 'kit viejo: la fila dice que no se puede y debajo, por qué');
+assert.equal(find(o, 'epic-nolaunch').$cut, false, 'kit viejo: el motivo va entero, en varios renglones si hace falta, no cortado con …');
 key('enter'); key('enter');
 assert.deepEqual([find(o, 'epic-confirm'), execs.length], [undefined, tried], 'kit viejo: ⏎ no pide confirmar ni lanza');
 delete sharedE().nolaunch; o = pop.render(cx);
@@ -325,6 +327,7 @@ assert.ok(closed.length === shut && text(o).includes('lanzando…'), 'mientras b
 await settle(); o = pop.render(cx);
 assert.deepEqual(execs.at(-1), ['bk', '_do', '--cwd', '/h/x', '--title', 'Lanzar #5', '--', 'run', '5', 'cwd=/h/x'], '⏎ lanza: bk run N suelto (bk _do), en la carpeta de su repo');
 assert.ok(text(o).includes('prepare.sh rechazó #5'), 'si falla, el error queda en la fila');
+assert.equal(find(o, 'epic-err')?.$cut, false, 'el error del lanzamiento va entero, no cortado con …');
 runReply = { code: 0, stdout: '', stderr: '' };
 key('enter'); key('enter'); await settle(); o = pop.render(cx);
 assert.ok(text(o).includes('lanzado') && !text(o).includes('prepare.sh rechazó #5'), 'si sale bien, «lanzado» y sin el error');
