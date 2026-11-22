@@ -393,14 +393,14 @@ with open(path, "a") as f:
         "input_tokens": int(i), "output_tokens": int(o), "cache_read_input_tokens": int(cr)}}}, separators=(",", ":")) + "\n")
 PY
 }
-uso u1 hoy m1 claude-sonnet-5 "$REPO" 0 1000000 100000 5000000
-uso u1 hoy m2 claude-haiku-5-5 "$WT" 0 2000000 1000000 0
+uso u1 hoy m1 claude-sonnet-5 "$REPO/herdr/mods" 0 1000000 100000 5000000   # desde una subcarpeta: cuenta como proj
+uso u1 hoy m2 claude-haiku-5-5 "$WT/lib" 0 2000000 1000000 0
 uso u1 ayer m3 claude-sonnet-5 "$REPO" 1 500000 0 0
 uso u1 antes m4 claude-sonnet-5 "$REPO" 3 250000 0 0
 T=$(hub stats); cents='(.cost * 100 | round)'
 check_eq "$(jq -c "[.today.tokens, (.today | $cents), .today.cache_read]" <<<"$T")" '[4100000,470,5000000]' "stats: hoy, como bk tokens (tokens sin las lecturas de caché, que van aparte)"
 check_eq "$(jq -c ".today.by_model | map([.model, .name, .tokens, $cents])" <<<"$T")" '[["claude-sonnet-5","sonnet 5",1100000,400],["claude-haiku-5-5","haiku 5.5",3000000,70]]' "stats: hoy por modelo, el más caro primero"
-check_eq "$(jq -c ".today.by_project | map([.project, .tokens, $cents])" <<<"$T")" '[["proj",1100000,400],["proj#7",3000000,70]]' "stats: hoy por proyecto"
+check_eq "$(jq -c ".today.by_project | map([.project, .tokens, $cents])" <<<"$T")" '[["proj",1100000,400],["proj#7",3000000,70]]' "stats: hoy por proyecto (un chat en una subcarpeta cuenta para su repo o worktree)"
 check_eq "$(jq -c "[(.days | length), .days[-1].date, (.days[-4:] | map([.tokens, $cents]))]" <<<"$T")" "[30,\"$TODAY\",[[250000,50],[0,0],[500000,100],[9100000,470]]]" "stats: los últimos 30 días hasta hoy, con ceros donde no hubo uso (como bk stats: con las lecturas de caché)"
 check_eq "$(jq -c "[.streak, .total.tokens, (.total | $cents), .total.sessions]" <<<"$T")" '[2,9850000,620,3]' "stats: racha de días seguidos y totales"
 uso u1 hoy m5 claude-sonnet-5 "$REPO" 0 1000000 0 0

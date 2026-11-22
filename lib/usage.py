@@ -202,9 +202,27 @@ def human_ctx(tokens):
     return f"{round(tokens / 1000)}k" if tokens else ""
 
 
+_ROOTS = {}
+
+
+def repo_root(cwd):
+    """La carpeta con .git (repo o worktree) que contiene a cwd; cwd mismo si no hay o ya no existe.
+    Un chat que hizo cd a lib/ o herdr/mods contaba como los proyectos «lib» y «mods» en bk stats."""
+    if cwd not in _ROOTS:
+        d, root = cwd.rstrip("/") or "/", cwd
+        while d and d != "/" and d != os.path.expanduser("~"):
+            if os.path.exists(os.path.join(d, ".git")):
+                root = d
+                break
+            d = os.path.dirname(d)
+        _ROOTS[cwd] = root
+    return _ROOTS[cwd]
+
+
 def project_name(cwd):
     if not cwd:
         return "?"
+    cwd = repo_root(cwd)
     base, parent = os.path.basename(cwd), os.path.basename(os.path.dirname(cwd))
     if parent.endswith("-wt"):  # worktree del kit: ../<repo>-wt/<n>
         return f"{parent[:-3]}#{base}"
