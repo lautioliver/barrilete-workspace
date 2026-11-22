@@ -21,7 +21,8 @@ Fuera de un repo de git: project y branch vacíos, sin changes.
 Lo corre Herdr cada pocos segundos, así que cuida la máquina: los git son de solo lectura y no toman el index.lock
 (GIT_OPTIONAL_LOCKS=0: no le traban un commit a un agente), el worktree de la carpeta se mira siempre y los demás se
 guardan en ~/.cache/bk/side/ hasta BK_SIDE_TTL segundos (20), o hasta que cambie su index, su HEAD o su carpeta
-(un commit, un archivo nuevo arriba de todo). Los que hay que mirar se miran en paralelo. Solo escribe ese caché.
+(un commit, un archivo nuevo arriba de todo). Los que hay que mirar se miran en paralelo. `bk roles` también se
+guarda ahí, hasta que cambie un roles.yml, el perfil o bk. Solo escribe ese caché.
 """
 import hashlib, json, os, subprocess, sys, tempfile, time
 from concurrent.futures import ThreadPoolExecutor
@@ -159,13 +160,48 @@ def changes_of(root):
             "branch": sh("git", "-C", root, "branch", "--show-current").strip()}
 
 
+def roles_key(top):
+    """Lo que decide `bk roles`: los roles.yml (del proyecto y de bk), el perfil activo y sus profiles.yml, y el
+    mismo bk. Si nada de eso cambió, la respuesta guardada vale."""
+    ws, conf = os.path.dirname(HERE), os.path.expanduser("~/.config/bk")
+    key = []
+    for f in [os.path.join(top, ".barrilete", "roles.yml") if top else "", os.path.join(ws, "roles.yml"),
+              os.path.join(conf, "profile"), os.path.join(conf, "profiles.yml"), os.path.join(ws, "profiles.yml"),
+              os.path.join(ws, "bin", "bk")]:
+        try:
+            st = os.stat(f)
+            key.append([f, st.st_mtime_ns, st.st_size])
+        except OSError:
+            key.append([f, None, None])
+    return key
+
+
 def profile(top):
+    """[{role, model, mode}] de `bk roles` (63 ms de bash): se guarda en ~/.cache/bk/side/ hasta que cambie algo de
+    roles_key, así el panel, que lo pide cada 4 s, no lo corre de nuevo."""
+    key, f = roles_key(top), os.path.join(CACHE, "roles-" + hashlib.sha1((top or "-").encode()).hexdigest()[:16] + ".json")
+    try:
+        with open(f) as fh:
+            d = json.load(fh)
+        if d.get("key") == key and isinstance(d.get("rows"), list):
+            return d["rows"]
+    except (OSError, ValueError, AttributeError):
+        pass
     rows = []
     for l in sh(os.path.join(os.path.dirname(HERE), "bin", "bk"), "roles", cwd=top or None).splitlines():
         p = l.split()
         if len(p) >= 2 and "/" in p[1]:
             prov, _, model = p[1].partition("/")
             rows.append({"role": p[0], "model": model if prov == "claude" else p[1], "mode": p[2] if len(p) > 2 else ""})
+    if rows:   # una corrida que falló no se guarda
+        try:
+            os.makedirs(CACHE, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=CACHE, suffix=".tmp")
+            with os.fdopen(fd, "w") as fh:
+                json.dump({"key": key, "rows": rows}, fh)
+            os.replace(tmp, f)
+        except OSError:
+            pass
     return rows
 
 
