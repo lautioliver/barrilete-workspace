@@ -307,7 +307,7 @@ hd_chat_cmd() {
 hd_chat_from() {
   local q="$1" row sid dir acct old top name ws
   row=$(python3 "$WS/lib/handoff.py" find "$q") \
-    || die "no hay un resumen listo de «$q» (bk handoff $q lo pide; los listos: bk handoff --listos)"
+    || die "no hay un resumen listo de «${q}» (bk handoff $q lo pide; los listos: bk handoff --listos)"
   IFS=$'\t' read -r sid dir acct old <<<"$row"
   [ -d "$dir" ] || die "la carpeta del resumen ya no existe: $dir"
   top=$(project_top "$dir"); name=$(project_of "$top")
