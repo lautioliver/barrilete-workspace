@@ -126,9 +126,15 @@ def load_titles():
 
 
 def repo_of(cwd):
-    url = sh("git", "-C", cwd, "remote", "get-url", "origin").strip()
-    m = re.search(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?$", url)
-    return m.group(1) if m else ""
+    """owner/repo del primer remoto de GitHub: origin primero, después cualquiera (workspace usa «respaldo»;
+    con solo origin, alt+i y alt+r decían «no tiene un origin de GitHub»). "" sin ninguno."""
+    names = sh("git", "-C", cwd, "remote").split()
+    for r in sorted(names, key=lambda n: n != "origin"):
+        url = sh("git", "-C", cwd, "remote", "get-url", r).strip()
+        m = re.search(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?$", url)
+        if m:
+            return m.group(1)
+    return ""
 
 
 def pr_of_branch(cwd, titles, fetch=True):

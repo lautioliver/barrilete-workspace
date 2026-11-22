@@ -188,7 +188,9 @@ check_eq "$(hub issues "$REPO" | jq -c '[.stale, (.items | map(.pr))]')" '[false
 rm -f "$TMP/sin-links"; old issues-o_r.json
 jq '. + [{"number":21,"title":"Nuevo","labels":[],"updatedAt":"","url":"","assignees":[]}]' "$TMP/gh-issues.json" >"$TMP/c.json" && mv "$TMP/c.json" "$TMP/gh-issues.json"
 check_eq "$(hub issues "$REPO" | jq -c '[.stale, .items[0].n]')" '[false,21]' "issues con la caché vencida y con red: trae lo nuevo"
-out=$(hub issues "$TMP/suelta" 2>"$TMP/err"); check_eq "$? [$out] $(has "$(cat "$TMP/err")" "no tiene un origin de GitHub")" "1 [] si" "issues fuera de un repo de GitHub: sale con 1 y lo dice"
+out=$(hub issues "$TMP/suelta" 2>"$TMP/err"); check_eq "$? [$out] $(has "$(cat "$TMP/err")" "no tiene un remoto de GitHub")" "1 [] si" "issues fuera de un repo de GitHub: sale con 1 y lo dice"
+g init -q -b main "$TMP/resp"; g -C "$TMP/resp" remote add respaldo "https://github.com/o/r.git"
+check_eq "$(hub issues "$TMP/resp" 2>/dev/null | jq -c '[.project, .repo]')" '["resp","o/r"]' "issues sin origin: usa el único remoto de GitHub (el workspace tiene solo respaldo)"
 
 # ---------- prs ----------
 cat >"$TMP/gh-prs.json" <<'EOF'
