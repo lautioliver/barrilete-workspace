@@ -24,6 +24,7 @@ import subprocess
 import sys
 import time
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 
 import tasks as TK   # tareas de los agentes (ADR-005 del kit): estado final, propuestas y cola de bk say
 import gentle as G   # paleta del tema, la misma que el riel
@@ -365,6 +366,17 @@ def machines():
     return [m["name"] for m in ms if m.get("name") and m.get("state") == "connected"]
 
 
+def _remote_ask(m, now):
+    """Los estados de la máquina m. Sin sh(): que una remota no responda no dice que el Herdr de acá esté colgado."""
+    try:
+        r = subprocess.run([HC, "exec", "--on", m, "--timeout", REMOTE_TIMEOUT, "bk", "_states"],
+                           capture_output=True, text=True, timeout=float(REMOTE_TIMEOUT) + 2)
+        got = json.loads(r.stdout)
+        return {"at": now, "ok": True, "states": [s for s in got if isinstance(s, dict)]}
+    except (ValueError, TypeError, OSError, subprocess.TimeoutExpired):   # apagada, sin bk o respondió otra cosa
+        return {"at": now, "ok": False, "states": []}
+
+
 def remote_states():
     """{<máquina>/<pane>: estado} de las otras máquinas, con una caché corta por máquina."""
     if backend() != "herdr" or os.environ.get("BK_REMOTE") == "0":
@@ -373,18 +385,25 @@ def remote_states():
         cache = json.load(open(REMOTE))
     except (OSError, ValueError):
         cache = {}
-    out, now, dirty = {}, time.time(), False
-    for m in machines():
+    if not isinstance(cache, dict):   # un archivo pisado a mano o a medio escribir no rompe bk ls
+        cache = {}
+    cache = {k: v for k, v in cache.items() if isinstance(v, dict)}
+    out, now = {}, time.time()
+    ms = machines()
+    def fresh(c):
+        at = c.get("at") if isinstance(c.get("at"), (int, float)) else 0
+        return now - at < (REMOTE_TTL if c.get("ok") else min(REMOTE_RETRY, REMOTE_TTL * 6))
+    due = [m for m in ms if not cache.get(m) or not fresh(cache[m])]
+    if due:   # a la vez: dos máquinas colgadas no suman dos esperas (pasaban los 8 s que esperan los mods)
+        with ThreadPoolExecutor(max_workers=min(len(due), 8)) as pool:
+            for m, c in zip(due, pool.map(lambda m: _remote_ask(m, now), due)):
+                cache[m] = c
+    dirty = bool(due)
+    for m in ms:
         c = cache.get(m) or {}
-        if not c or now - c.get("at", 0) >= (REMOTE_TTL if c.get("ok") else min(REMOTE_RETRY, REMOTE_TTL * 6)):
-            try:
-                got = json.loads(sh(HC, "exec", "--on", m, "--timeout", REMOTE_TIMEOUT, "bk", "_states",
-                                    timeout=float(REMOTE_TIMEOUT) + 2))
-                c = {"at": now, "ok": True, "states": [s for s in got if isinstance(s, dict)]}
-            except (ValueError, TypeError):   # apagada, sin bk o respondió otra cosa
-                c = {"at": now, "ok": False, "states": []}
-            cache[m], dirty = c, True
         for st in c.get("states") or []:
+            if not isinstance(st, dict):
+                continue
             p = st.get("pane") or ""
             if p and "/" not in p:
                 st = dict(st, pane=f"{m}/{p}", _machine=m)

@@ -134,7 +134,7 @@ pisan con los del repo (se editan acá).
   manejan desde acá. Su terminal tiene la dirección `<máquina>/<t>` y se adopta igual (el proyecto se le pregunta
   a esa máquina; los números de ventana se reparten acá, así no se repiten). El estado lo anota el hook de allá:
   bk lo trae con `hc exec --on <máquina> bk _states`, lo guarda 5 s (`BK_REMOTE_TTL`) y a una máquina que no
-  responde le vuelve a preguntar recién a los 30 s, con un tope de 4 s por consulta (`BK_REMOTE_TIMEOUT`).
+  responde le vuelve a preguntar recién a los 30 s, con un tope de 4 s por consulta (`BK_REMOTE_TIMEOUT`). A todas a la vez: dos colgadas no suman dos esperas.
   Para eso la otra máquina necesita `bk` en el PATH con el backend en herdr y los hooks de Claude registrados.
   `BK_REMOTE=0` lo apaga. Lo que depende de archivos de esa máquina todavía sale vacío para sus agentes: el
   título del issue, los subagentes, las tareas y la cola de `bk say`.

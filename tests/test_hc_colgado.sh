@@ -18,5 +18,19 @@ out=$(run "$TMP/hc" 'AG.sh(AG.HC, "ls", timeout=1); print(AG.sh("echo", "sigue")
 check_eq "$out" "sigue" "hc colgado: los comandos que no son hc siguen andando"
 out=$(run "$TMP/hc-ok" 'print(AG.sh(AG.HC, "ls").strip(), AG.sh(AG.HC, "ls").strip())')
 check_eq "$out $(wc -l <"$TMP/ok-calls" | tr -d ' ')" "{} {} 2" "hc que responde: cada llamada va a Herdr"
+# Otras máquinas conectadas pero colgadas: se les pregunta a la vez (no suman una espera cada una) y una remota
+# lenta no marca como colgado al Herdr de esta máquina (antes, lo siguiente de la corrida no le llegaba a Herdr).
+cat >"$TMP/hc-remote" <<'SH'
+#!/bin/sh
+case "$1" in
+  machine) echo '{"machines":[{"name":"a","state":"connected"},{"name":"b","state":"connected"},{"name":"c","state":"connected"}]}' ;;
+  exec) sleep 4 ;;
+  *) echo '{}' ;;
+esac
+SH
+chmod +x "$TMP/hc-remote"
+out=$(BK_CACHE_DIR="$TMP/cache" BK_REMOTE_TIMEOUT=0.5 run "$TMP/hc-remote" 'import time
+t = time.time(); AG.remote_states(); print("rapido" if time.time() - t < 4 else "lento", AG.sh(AG.HC, "ls").strip())')
+check_eq "$out" "rapido {}" "tres máquinas colgadas: se esperan a la vez y el Herdr local sigue respondiendo"
 echo "1..$N"
 [ "$FAILED" -eq 0 ]
