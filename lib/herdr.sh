@@ -313,7 +313,8 @@ hd_chat_from() {
   top=$(project_top "$dir"); name=$(project_of "$top")
   [ -z "${BK_ACCOUNT:-}" ] || acct="$BK_ACCOUNT"   # bk --account X chat --desde abra: manda la que pediste
   BK_ACCOUNT="$acct"
-  WS_CHAT_CMD="p=\$(python3 $(sq "$WS/lib/handoff.py") take $(sq "$sid")) && claude -- \"\$p\" || claude"
+  # con exec, claude queda al frente de la terminal: Herdr lo ve como agente y no como el bash de -c
+  WS_CHAT_CMD="p=\$(python3 $(sq "$WS/lib/handoff.py") take $(sq "$sid")) && exec claude -- \"\$p\" || exec claude"
   if [ "$DRY" -eq 1 ]; then printf '%s\t%s\t%s\t%s\n' "$name" "$dir" "$acct" "$WS_CHAT_CMD"; return; fi
   # Sigue siendo el mismo trabajo: el chat nuevo nace con el nombre del viejo y en qué quedó, y queda unido a él
   # (bk.from) para que la barra de agentes lo muestre en su lugar. El resumen se lee ahora: el chat nuevo lo

@@ -169,6 +169,7 @@ bk handoff --listo abc123 >/dev/null 2>&1
 check_eq "$(( $(tabs) - n0 )) $(log | grep -c 'mod.open')" "1 0" "handoff --listo, pedido por la persona: abre solo el chat nuevo, sin aviso"
 last=$(st -r '.terms | to_entries | last | .value.argv | join(" ")')
 check_eq "$(has "$last" "handoff.py' take 'abc123'")" "si" "handoff --listo: el chat nuevo arranca con el resumen de esa sesión"
+check_eq "$(has "$last" "&& exec claude -- ")" "si" "handoff --listo: claude con exec, al frente de la terminal (si no, Herdr ve el bash y lo toma por consola vacía)"
 n0=$(tabs); bk handoff --listo abc123 >/dev/null 2>&1
 check_eq "$(( $(tabs) - n0 ))" "0" "handoff --listo otra vez: no abre otro chat"
 rm -f "$BK_HANDOFF_DIR"/abc123.*
