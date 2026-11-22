@@ -184,7 +184,8 @@ hd_relaunch_chat() {
   case "$st" in working|waiting|background) die "el chat está trabajando o te espera: relanzalo cuando termine" ;; esac
   case "$sid" in bk-*) sid="" ;; esac
   j=$(hd_hc get "$t" --json 2>/dev/null) || die "no encuentro el chat de $name en Herdr"
-  dir=$(jq -r '.cwd // ""' <<<"$j"); [ -d "$dir" ] || dir=$PWD
+  # La carpeta de claude (foreground), no la de la shell: --resume busca la conversación por carpeta
+  dir=$(jq -r '.foreground.cwd // .cwd // ""' <<<"$j"); [ -d "$dir" ] || dir=$PWD
   nm=$(jq -r '.labels["bk.name"] // ""' <<<"$j")
   # Sin la cuenta que traía este bk (la del chat viejo, si se corrió desde ahí): manda la del espacio
   BK_ACCOUNT="" BK_ACCOUNT_CLAUDE="" BK_WS_NAME="$nm" WS_CHAT_CMD="claude${sid:+ --resume $(sq "$sid")}" \
@@ -427,7 +428,7 @@ hd_adopt() {
     "")
       [ -n "$(jq -r '.labels["herdr.tab"] // ""' <<<"$j")" ] || return 0
       [ -n "$(jq -r '.status.app // ""' <<<"$j")" ] || return 0
-      dir=$(jq -r '.cwd // ""' <<<"$j")
+      dir=$(jq -r '.foreground.cwd // .cwd // ""' <<<"$j")   # la de claude, no la de la shell (pudo hacer cd)
       case "$t" in
         */*)   # de otra máquina (<máquina>/<t>): la carpeta es de allá, así que el proyecto se le pregunta a
                # ella; si no tiene bk o no responde, el nombre de la carpeta

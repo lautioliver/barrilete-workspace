@@ -71,7 +71,9 @@ def origin(sid, pane=None, cwd=None):
             g = {}
         labels = g.get("labels") or {}
         session, name, account = labels.get("bk.win", ""), labels.get("bk.name", ""), labels.get("bk.account", "")
-        cwd = cwd or g.get("cwd") or ""
+        # La carpeta del proceso de adelante (claude), no la de la shell de la terminal: si la terminal se abrió en
+        # otro proyecto y después se hizo cd, la de la shell es la del otro
+        cwd = cwd or (g.get("foreground") or {}).get("cwd") or g.get("cwd") or ""
     cwd = cwd or os.getcwd()
     account = account or os.environ.get("BK_ACCOUNT_CLAUDE", "") or "default"
     top = sh("git", "-C", cwd, "rev-parse", "--show-toplevel") or cwd

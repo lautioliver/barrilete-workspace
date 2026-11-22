@@ -9,6 +9,8 @@ Guarda espacios, pestañas y terminales en $HD_FAKE/state.json y anota en $HD_FA
   $HD_FAKE/fail-label      si existe, `hc label` falla (para probar que bk no deja un agente sin etiquetas)
   $HD_FAKE/machines        las otras máquinas de `hc machine ls`, una por línea: <nombre> [estado]
   $HD_FAKE/exec-<m>-<sub>  lo que imprime `hc exec --on <m> bk <sub> …`; si no está, la máquina no responde
+Una terminal con "fg_cwd" en state.json: su proceso de adelante (claude) corre en otra carpeta que la de la shell
+(el foreground.cwd de hc get), como un claude que se abrió después de un cd.
 Una terminal de otra máquina es una entrada más de terms, con la dirección <máquina>/<t> (un test la agrega).
 """
 import json
@@ -125,7 +127,7 @@ def hc(args):
         # status: lo que informa un agente (un test lo pone en state.json: {"app": "claude-code", "state": "idle"});
         # una shell no tiene
         out({"address": rest[0], "cwd": t["cwd"], "labels": t["labels"], "argv": t["argv"], "state": "live",
-             "status": t.get("status"), "foreground": {"cwd": t["cwd"]}})
+             "status": t.get("status"), "foreground": {"cwd": t.get("fg_cwd") or t["cwd"]}})
     if cmd == "label":
         if os.path.exists(os.path.join(FAKE, "fail-label")) or rest[0] not in st["terms"]:
             sys.exit(1)
