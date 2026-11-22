@@ -210,6 +210,13 @@ def mark_handoffs(rows, sids):
     return rows
 
 
+def save_cache(cache):
+    try:
+        G.save_json(CACHE, cache)
+    except OSError:
+        pass
+
+
 def load(prune=True):
     """(abiertas, recientes). prune=False: no borra el estado de las sesiones cuyo pane ya no existe (igual pasan a
     recientes); lo usa bk _hub, que solo mira."""
@@ -300,11 +307,7 @@ def load(prune=True):
                               "title": "terminó · enter lo retoma acá" if m else "terminó (ventana abierta)",
                               "mtime": 0, "state": "ended", "target": pane["target"], "window": pane["window"],
                               "pane": pid, "dead": True, "session": pane["session"], "wsid": ""})
-    try:
-        os.makedirs(os.path.dirname(CACHE), exist_ok=True)
-        json.dump(cache, open(CACHE, "w"))
-    except OSError:
-        pass
+    save_cache(cache)
     rows_open.sort(key=lambda r: -r["mtime"])
     sids = HO.ready_sids()
     return mark_handoffs(rows_open, sids), mark_handoffs(rows_recent, sids)

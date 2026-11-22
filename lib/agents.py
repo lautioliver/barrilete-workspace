@@ -158,8 +158,7 @@ def pr_of_branch(cwd, titles, fetch=True):
 
 def save_titles(titles):
     try:
-        os.makedirs(os.path.dirname(TITLES), exist_ok=True)
-        json.dump(titles, open(TITLES, "w"), ensure_ascii=False)
+        G.save_json(TITLES, titles, ensure_ascii=False)
     except OSError:
         pass
 

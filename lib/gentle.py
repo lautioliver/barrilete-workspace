@@ -33,13 +33,26 @@ CARD_PAD = 4
 def ui():
     try:
         return {**DEFAULTS, **json.load(open(UI_FILE))}
-    except (OSError, ValueError):
+    except (OSError, ValueError, TypeError):   # TypeError: un ui.json que no es un objeto
         return dict(DEFAULTS)
 
 
+def save_json(path, data, **kw):
+    """Escribe data en path de una sola vez (temporal + rename): otro bk que lo lee al mismo tiempo, o una escritura
+    que se corta, nunca ven medio archivo. Si falla, path queda como estaba y el error sube."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, **kw)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
 def save_ui(conf):
-    os.makedirs(os.path.dirname(UI_FILE), exist_ok=True)
-    json.dump(conf, open(UI_FILE, "w"), indent=1)
+    save_json(UI_FILE, conf, indent=1)
 
 
 def is_day():
