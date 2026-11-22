@@ -603,7 +603,9 @@ launch() {
       *) die "no pude crear la tarea $tid" ;;
     esac
     env+=(-e "BK_TASK_DIR=$tdir")
-    full="$full; $(sq "$WS/bin/bk") _ended $(sq "$tdir")"
+    # set -m: el agente en su propio grupo de procesos y dueño de la terminal, así Herdr ve a claude adelante
+    # (y no a bash) aunque después venga _ended; sin eso, tras reiniciar Herdr el agente se ve como una shell
+    full="set -m; $full; $(sq "$WS/bin/bk") _ended $(sq "$tdir")"
   fi
   local pane parent
   if [ "$BACKEND" = herdr ]; then

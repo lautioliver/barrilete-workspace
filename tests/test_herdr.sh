@@ -73,7 +73,7 @@ for v in "BK_BACKEND=herdr" "BARRILETE_ROLE=implementer" "BARRILETE_MODEL=sonnet
   check_eq "$(grep -cxF "$v" <<<"$A")" "1" "bk run: el agente recibe $v"
 done
 check_eq "$(st -r '.terms.t2.argv[-3:] | .[0] + " " + .[1]')" "bash -c" "bk run: el comando corre en bash -c"
-check_eq "$(st -r '.terms.t2.argv[-1]')" "claude --model sonnet '/implement-issue 7'; '$ROOT/bin/bk' _ended '$TD'" "bk run: claude con el prompt, y después cierra la tarea"
+check_eq "$(st -r '.terms.t2.argv[-1]')" "set -m; claude --model sonnet '/implement-issue 7'; '$ROOT/bin/bk' _ended '$TD'" "bk run: claude con el prompt (adelante en la terminal: set -m), y después cierra la tarea"
 check_eq "$(st -c '.terms.t2.labels | [.["bk.kind"], .["bk.win"], .["bk.project"], .["bk.role"], .["bk.ref"]]')" '["agent","i7","proj","implementer","#7"]' "bk run: la terminal queda etiquetada"
 check_eq "$(st -r '.terms.t1.labels["bk.id"] + " " + .terms.t2.labels["bk.id"]')" "1 2" "bk run: el agente toma su número de ventana al nacer, después del chat"
 check_eq "$(jq -r '.pane + " " + .state' "$STATE/bk-i7.json")" "t2 waiting" "bk run: el pre-registro anota la terminal como pane"
