@@ -153,7 +153,7 @@ pisan con los del repo (se editan acá).
   | Tecla | Qué hace | Corre |
   |---|---|---|
   | `alt+k` | Comandos: todo lo que se puede hacer, por nombre y con su tecla. Planear y orquestar se lanzan desde acá | `bk plan`, `bk orchestrate`… |
-  | `alt+i` | Implementar un issue: los abiertos del proyecto que mirás. Enter lanza al agente (o va a su pestaña si ya corre); Tab cambia el rol | `bk run <n>` |
+  | `alt+i` | Implementar un issue: los abiertos del proyecto que mirás (del remoto de GitHub: `origin` o, si no hay, el que haya). Enter lanza al agente (o va a su pestaña si ya corre); Tab cambia el rol | `bk run <n>` |
   | `alt+r` | Revisar o corregir un PR. Enter lanza al reviewer, o lo aprueba si el kit ya lo propuso; Tab pide una instrucción y lanza el fix; ctrl+g vuelve a correr los checks que fallaron; ctrl+o lo abre en GitHub | `bk review`, `bk approve`, `bk fix`, `bk rerun --go` |
   | `alt+e` | Te esperan: tareas y aprobaciones. Enter lanza el reviewer propuesto o va a la pestaña del agente; Tab suma el historial | `bk approve` |
   | `alt+p` | La épica del chat que mirás (si no tiene y hay varias, una lista para elegir): sus sub-issues por estado, quién espera a quién y el camino más largo. Enter va al agente o, sobre uno libre, lo lanza con confirmación. En un repo donde no se puede lanzar (sin barrilete-kit 2 o más nuevo, como uno con el kit 0.9) no ofrece «Lanzar»: dice por qué, lo mismo que diría `bk run` (`lib/kit_check.py`); `g` abre GitHub | `bk run <n>` |
@@ -164,7 +164,7 @@ pisan con los del repo (se editan acá).
   | `alt+h` | Resumen y seguir en un chat nuevo: se lo pide al chat que mirás, dejándolo abierto o cerrándolo cuando el nuevo abre. Abajo, los resúmenes listos | `bk handoff --term <t> [--cerrar]`, `bk chat --desde` |
   | `alt+g` | El panel derecho en la pestaña Cambios: lo sin commitear del proyecto y de los worktrees de los agentes. El clic en un archivo abre su diff en un popup (esc lo cierra). Otra vez `alt+g` vuelve a Estado | |
   | `alt+b` | Ramas de todos los proyectos, separadas por proyecto (el que mirás primero): si ya entró (PR mergeado o `bk land`), su PR, su worktree y lo sin commitear. Enter abre un chat en su worktree (o le crea uno); ctrl+x dos veces la borra, solo si no se pierde nada; ctrl+o abre su PR | `bk chat --carpeta`, `bk _hub branch-rm` |
-  | `alt+u` | Uso y costo: hoy, el mes, los últimos 30 días, por modelo y por proyecto | |
+  | `alt+u` | Uso y costo: hoy, el mes, los últimos 30 días, por modelo y por proyecto (un chat en una subcarpeta cuenta para su repo o worktree) | |
   | `alt+/` | Hoja de teclas: lee el `keys.json` de Herdr y dice qué hace cada una; Enter la corre | |
   | `alt+m` | Radio | `bk song …` |
   | `alt+,` | Aspecto: tema, paneles, tamaño y fuente de la terminal | |
@@ -310,7 +310,7 @@ A la izquierda, la marca, los espacios y los agentes, cada uno con el chip de su
 estado; angosta queda en un riel con solo los chips. En el centro, las pestañas y los panes, cada pane con su
 cabecera (número, programa, qué hace, carpeta y rama). A la derecha, tres pestañas: Estado, con dos tarjetas
 (sesión y GitHub); TODO, los pasos del issue del chat que mirás (`alt+t`); y Cambios, lo sin commitear, con el diff de
-cada archivo en un popup al hacerle clic (`alt+g`). `alt+.` esconde el panel. Abajo, la barra de estado: proyecto, rama, cuenta, qué te espera, uso de hoy, CPU y memoria de cada computadora, radio y las
+cada archivo en un popup al hacerle clic (`alt+g`). `alt+.` esconde el panel. Abajo, la barra de estado: proyecto, rama, cuenta, qué te espera, uso de hoy, CPU y memoria de cada computadora (`cpu 3%  mem 56%`), radio y las
 teclas de comandos y de la hoja de teclas. La cuenta es la de Claude de la terminal que mirás: su mail (de su
 `.claude.json`, sin preguntarle a Claude) y, si no es la de siempre, el nombre de `bk account` delante; el panel
 derecho muestra lo mismo. Un clic en ella abre el panel Cuentas para cambiarla. La marca de estado es la misma en todos, con los colores `blocked`, `done` y `working`
