@@ -42,7 +42,7 @@ def landed_path():
 def git(top, *a, timeout=10):
     try:
         p = subprocess.run(["git", "-C", top, *a], capture_output=True, text=True, timeout=timeout,
-                           env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+                           env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"})
         return p.returncode, p.stdout, p.stderr
     except (OSError, subprocess.SubprocessError) as e:
         return 1, "", str(e)
