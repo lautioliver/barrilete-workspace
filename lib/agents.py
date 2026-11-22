@@ -38,10 +38,22 @@ R, DIM, BOLD = "\033[0m", "\033[2m", "\033[1m"
 ROSE, AMBER, GREEN, IRIS = G.ROSE, G.AMBER, G.GREEN, G.IRIS
 
 
+_HC_HUNG = []   # Herdr no respondió a tiempo en esta corrida: no se lo vuelve a esperar
+
+
 def sh(*args, timeout=5):
+    """La salida del comando, o "" si falla. Si hc (Herdr) no responde a tiempo una vez, las demás llamadas a hc de
+    esta corrida devuelven "" enseguida: con Herdr colgado, bk ls y los paneles no suman una espera por terminal."""
+    hc = bool(args) and args[0] == HC
+    if hc and _HC_HUNG:
+        return ""
     try:
         return subprocess.run(args, capture_output=True, text=True, timeout=timeout).stdout
-    except (OSError, subprocess.SubprocessError):
+    except subprocess.TimeoutExpired:
+        if hc:
+            _HC_HUNG.append(True)
+        return ""
+    except Exception:   # OSError, un argumento roto: como si no hubiera respondido
         return ""
 
 

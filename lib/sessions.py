@@ -23,6 +23,7 @@ import gentle as G  # noqa: E402  (paleta del tema, una sola para todas las vist
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import handoff as HO  # noqa: E402  (resumenes listos para seguir en un chat nuevo)
+import agents as AG  # noqa: E402
 from agents import backend, HC  # noqa: E402  (tmux o Herdr, lo mismo que decide bin/bk)
 
 APP = os.environ.get("BK_HERDR_APP") or shutil.which("herdr-app") or "herdr-app"
@@ -46,10 +47,8 @@ WHY = {"cerrada": "terminal cerrada", "vacia": "consola vacía"}
 
 
 def sh(*args):
-    try:
-        return subprocess.run(args, capture_output=True, text=True, timeout=3).stdout
-    except Exception:
-        return ""
+    """Como agents.sh (y con su mismo corte: si hc no respondió una vez, no se lo vuelve a esperar), con 3 s."""
+    return AG.sh(*args, timeout=3)
 
 
 def tmux_panes():
