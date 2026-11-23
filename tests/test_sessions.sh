@@ -69,7 +69,7 @@ check_eq "$(hpy open t7)" "ok" "Herdr: enter sobre una sesión abierta no da err
 check_eq "$(grep -c '^tmux' "$TMP/log") $(grep '^app' "$TMP/log" | tr '\n' ';')" "0 app do space.select --id sp1;app do tab.select --id tb7;app do pane.focus --terminal t7;" "Herdr: muestra su espacio, su pestaña y la enfoca, sin tmux"
 check_eq "$(hpy open t9 | cut -d' ' -f1-3) $(grep -c '^app' "$TMP/log")" "no encuentro su 0" "Herdr: una terminal sin pestaña avisa y no hace nada"
 check_eq "$(hpy resume "$TMP/dir con espacio")" "ok" "Herdr: enter sobre una reciente no da error"
-check_eq "$(grep -c '^tmux' "$TMP/log") $(grep '^bk' "$TMP/log")" "0 bk chat | herdr | $TMP/dir con espacio | cd '$TMP/dir con espacio' && claude --resume abc-123" "Herdr: retomar es bk chat en su proyecto, con claude --resume en la carpeta de la sesión, sin tmux"
+check_eq "$(grep -c '^tmux' "$TMP/log") $(grep '^bk' "$TMP/log")" "0 bk chat | herdr | $TMP/dir con espacio | cd '$TMP/dir con espacio' && exec claude --resume abc-123" "Herdr: retomar es bk chat en su proyecto, con claude --resume en la carpeta de la sesión, sin tmux"
 BACK=tmux hpy resume "$TMP/dir con espacio" >/dev/null
 check_eq "$(grep -c '^bk' "$TMP/log") $(grep -c '^tmux has-session' "$TMP/log")" "0 1" "con tmux, retomar sigue siendo una ventana de tmux"
 check_eq "$(hpy close)" "vive en Herdr" "x sobre una sesión de Herdr: no cierra nada y dice dónde cerrarla"
@@ -80,9 +80,19 @@ cat >"$TMP/hc" <<EOF
 #!/bin/sh
 echo "hc \$*" >>"$TMP/log"
 case "\$1 \$2" in
-  "ls --json") echo '{"terminals":[{"address":"t7","state":"live","agent":"claude-code","status":"idle","where":"proj / chat"},{"address":"t6","state":"live","agent":"zsh","where":"proj / 2"},{"address":"t5","state":"live","agent":"zsh","where":"proj / 3"}]}' ;;
+  "ls --json") echo '{"terminals":[{"address":"t7","state":"live","agent":"claude-code","status":"idle","where":"proj / chat"},{"address":"t6","state":"live","agent":"zsh","where":"proj / 2"},{"address":"t5","state":"live","agent":"zsh","where":"proj / 3"},{"address":"t8","state":"live","agent":"zsh","where":"proj / 4"}]}' ;;
 esac
 EOF
+# Los procesos: en t6 solo queda el shell; en t8 corre un claude detrás de un bash -c (Herdr dice zsh)
+cat >"$TMP/ps" <<'EOF'
+#!/bin/sh
+case "$*" in
+  *E*) echo "  101 -zsh TERM=x HC_TERMINAL_ID=t6"; echo "  202 claude -- hola TERM=x HC_TERMINAL_ID=t8"
+       echo "  303 /bin/bash -c claude TERM=x HC_TERMINAL_ID=t6" ;;
+  *)   echo "  101 -zsh"; echo "  202 /Users/x/.local/bin/claude"; echo "  303 /bin/bash" ;;
+esac
+EOF
+chmod +x "$TMP/ps"
 seed() {   # sid pane hace-cuántos-segundos: una sesión con su estado y su transcript
   printf '{"state":"working","pane":"%s","cwd":"%s","ts":%s}\n' "$2" "$TMP/dir con espacio" "$(( $(date +%s) - $3 ))" >"$R/state/$1.json"
   printf '{"type":"user","cwd":"%s","message":{"content":"hola %s"}}\n' "$TMP/dir con espacio" "$1" >"$R/projects/-proj/$1.jsonl"
@@ -108,7 +118,7 @@ check_eq "$(ls "$R/state" | tr '\n' ' ')" "nueva.json viva.json " "y su estado v
 check_eq "$(rpy revive --dry-run | grep -c 'cerrada\|vacia') $(grep -c '^bk' "$TMP/log") $(rpy dead | wc -w | tr -d ' ')" "2 0 2" "bk revive --dry-run: las lista y no abre ni olvida nada"
 check_eq "$(rpy revive nada >/dev/null 2>&1; echo $?) $(grep -c '^bk' "$TMP/log")" "1 0" "bk revive <algo que no está anotado>: error y no abre nada"
 rpy revive cerr >/dev/null
-check_eq "$(grep '^bk' "$TMP/log")" "bk chat | herdr | $TMP/dir con espacio | cd '$TMP/dir con espacio' && claude --resume cerrada" "bk revive <principio del id>: retoma solo esa, como Enter sobre una reciente"
+check_eq "$(grep '^bk' "$TMP/log")" "bk chat | herdr | $TMP/dir con espacio | cd '$TMP/dir con espacio' && exec claude --resume cerrada" "bk revive <principio del id>: retoma solo esa, como Enter sobre una reciente"
 check_eq "$(rpy dead)" "vacia:vacia" "la retomada sale de la lista"
 seed otra t9 500; rpy open >/dev/null; rpy revive >/dev/null
 check_eq "$(grep -c '^bk chat' "$TMP/log") $(rpy dead | wc -w | tr -d ' ')" "2 0" "bk revive: retoma todas las anotadas y la lista queda vacía"
@@ -117,5 +127,10 @@ seed vuelve t9 500; rpy open >/dev/null; seed vuelve t7 5
 check_eq "$(rpy dead)" "" "una anotada que volvió a abrirse (por otro lado) deja de estar muerta"
 seed adios t9 500; rpy open >/dev/null; rpy revive --forget >/dev/null
 check_eq "$(grep -c '^bk' "$TMP/log") $(rpy dead | wc -w | tr -d ' ')" "0 0" "bk revive --forget: las saca de la lista sin abrir nada"
+# El caso real (2026-11-21): un chat que siguió de un resumen corre claude detrás de bash -c y Herdr dice "zsh";
+# sin mirar los procesos, bk ls lo daba por muerto, le borraba el estado y bk revive lo duplicaba
+rm -f "$R/dead.json" "$R"/state/*.json; seed escondida t8 500; seed vacia t6 500
+check_eq "$(rpy open)" "escondida" "un claude vivo detrás de un bash -c (Herdr dice zsh) sigue abierto"
+check_eq "$(rpy dead)" "vacia:vacia" "y no queda anotado como muerto; la consola vacía de verdad sí"
 echo "1..$N"
 [ "$FAILED" -eq 0 ]

@@ -443,9 +443,9 @@ export default class Agents extends View {
         .child(div().flex_1().min_w(0).truncate().text_color(r.kind === "wait" || r.kind === "done" ? t.dim : t.foreground).child(r.title))
         .child(h_flex().flex_none().gap(6).items_center().text_size(11).children(right));
       const extra = [];
-      // Elegido en un repo donde no se puede lanzar: el motivo entero, debajo (lo mismo que diría bk run)
-      if (on && r.kind === "free" && noWhy(r) && !err) extra.push(div().id("epic-nolaunch").mx(POP.pad).ml(indent).mb(4).text_size(11).text_color(t.blocked).truncate().tooltip(noWhy(r)).child(noWhy(r)));
-      if (err) extra.push(div().mx(POP.pad).ml(indent).mb(4).text_size(11).text_color(t.blocked).truncate().tooltip(err).child(err));
+      // Elegido en un repo donde no se puede lanzar: el motivo entero, debajo y en los renglones que haga falta (lo mismo que diría bk run)
+      if (on && r.kind === "free" && noWhy(r) && !err) extra.push(div().id("epic-nolaunch").mx(POP.pad).ml(indent).mb(6).text_size(11).line_height(1.4).text_color(t.blocked).child(noWhy(r)));
+      if (err) extra.push(div().id("epic-err").mx(POP.pad).ml(indent).mb(6).text_size(11).line_height(1.4).text_color(t.blocked).child(err));
       if (this.confirm === r.key) {
         // Un solo renglón: el comando y su carpeta a la izquierda, los botones a la derecha
         extra.push(h_flex().id("epic-confirm").mx(POP.pad).ml(indent).mb(6).px(10).py(5).gap(10).items_center().rounded(7).border_1().border_color(al(t.accent, "66")).bg(al(t.accent, "12")).text_size(11.5).text_color(t.muted)

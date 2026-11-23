@@ -23,6 +23,7 @@ import gentle as G  # noqa: E402  (paleta del tema, una sola para todas las vist
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import handoff as HO  # noqa: E402  (resumenes listos para seguir en un chat nuevo)
+import agents as AG  # noqa: E402
 from agents import backend, HC  # noqa: E402  (tmux o Herdr, lo mismo que decide bin/bk)
 
 APP = os.environ.get("BK_HERDR_APP") or shutil.which("herdr-app") or "herdr-app"
@@ -46,10 +47,8 @@ WHY = {"cerrada": "terminal cerrada", "vacia": "consola vacía"}
 
 
 def sh(*args):
-    try:
-        return subprocess.run(args, capture_output=True, text=True, timeout=3).stdout
-    except Exception:
-        return ""
+    """Como agents.sh (y con su mismo corte: si hc no respondió una vez, no se lo vuelve a esperar), con 3 s."""
+    return AG.sh(*args, timeout=3)
 
 
 def tmux_panes():
@@ -90,11 +89,34 @@ def gone(pane, panes, hpanes):
     return bool(mine) and pane not in mine
 
 
-def hollow(s, hpanes):
+AGENT_PROCS = {"claude", "codex"}
+
+
+def agent_terminals():
+    """Las terminales de Herdr (su HC_TERMINAL_ID) donde corre de verdad un claude o un codex, según los procesos.
+    Herdr dice "zsh" cuando el agente no encabeza la terminal (bash -c '… && claude …', bk run con su _ended)."""
+    names = {}
+    for line in sh("ps", "-axww", "-o", "pid=,comm=").splitlines():
+        pid, _, comm = line.strip().partition(" ")
+        names[pid] = os.path.basename(comm.strip())
+    out = set()
+    for line in sh("ps", "-axwwE", "-o", "pid=,command=").splitlines():
+        pid, _, rest = line.strip().partition(" ")
+        if names.get(pid) in AGENT_PROCS:
+            m = re.search(r"(?:^|\s)HC_TERMINAL_ID=(\S+)", rest)
+            if m:
+                out.add(m.group(1))
+    return out
+
+
+def hollow(s, hpanes, alive=agent_terminals):
     """¿Su terminal de Herdr sigue viva pero ya no corre un agente, solo el shell? Claude murió sin mandar
-    SessionEnd y quedó la consola vacía. Una sesión recién lanzada no cuenta: Herdr tarda en ver al agente."""
+    SessionEnd y quedó la consola vacía. Una sesión recién lanzada no cuenta: Herdr tarda en ver al agente. Antes
+    de creerle a Herdr se miran los procesos (alive): si en esa terminal corre un claude o un codex, está viva."""
     pane = hpanes.get(s.get("pane") or "")
-    return bool(pane) and pane.get("agent") in SHELLS and time.time() - (s.get("ts") or 0) > GRACE
+    if not (pane and pane.get("agent") in SHELLS and time.time() - (s.get("ts") or 0) > GRACE):
+        return False
+    return s.get("pane") not in alive()
 
 
 def read_dead():
@@ -188,12 +210,25 @@ def mark_handoffs(rows, sids):
     return rows
 
 
+def save_cache(cache):
+    try:
+        G.save_json(CACHE, cache)
+    except OSError:
+        pass
+
+
 def load(prune=True):
     """(abiertas, recientes). prune=False: no borra el estado de las sesiones cuyo pane ya no existe (igual pasan a
     recientes); lo usa bk _hub, que solo mira."""
     panes = tmux_panes()
     hpanes = herdr_panes() if backend() == "herdr" else {}
     live = {}  # session_id -> estado
+    memo = {}
+
+    def alive():   # los procesos se miran una vez y solo si hace falta
+        if "a" not in memo:
+            memo["a"] = agent_terminals()
+        return memo["a"]
     for f in glob.glob(os.path.join(STATE, "*.json")):
         sid = os.path.basename(f)[:-5]
         if sid.startswith("bk-"):
@@ -208,7 +243,7 @@ def load(prune=True):
         # Solo si tmux (o Herdr, si el pane es una terminal suya) respondió: una lista vacía no prueba nada.
         # Lo mismo si su terminal de Herdr sigue pero quedó en consola vacía (Claude murió y quedó el shell).
         # Antes de borrar el estado se anota en el registro de muertas, que es lo que retoma bk revive.
-        why = "cerrada" if gone(s.get("pane"), panes, hpanes) else "vacia" if hollow(s, hpanes) else None
+        why = "cerrada" if gone(s.get("pane"), panes, hpanes) else "vacia" if hollow(s, hpanes, alive) else None
         if why:
             if prune:
                 note_dead(sid, s, why)
@@ -272,11 +307,7 @@ def load(prune=True):
                               "title": "terminó · enter lo retoma acá" if m else "terminó (ventana abierta)",
                               "mtime": 0, "state": "ended", "target": pane["target"], "window": pane["window"],
                               "pane": pid, "dead": True, "session": pane["session"], "wsid": ""})
-    try:
-        os.makedirs(os.path.dirname(CACHE), exist_ok=True)
-        json.dump(cache, open(CACHE, "w"))
-    except OSError:
-        pass
+    save_cache(cache)
     rows_open.sort(key=lambda r: -r["mtime"])
     sids = HO.ready_sids()
     return mark_handoffs(rows_open, sids), mark_handoffs(rows_recent, sids)
@@ -364,9 +395,10 @@ def herdr_show(addr):
 
 def herdr_resume(r, cwd):
     """Retomar una sesión cerrada con Herdr: un chat más en el espacio de su proyecto (bk chat), que arranca con
-    claude --resume en la carpeta de la sesión (Claude la busca por carpeta). Devuelve si se abrió."""
+    claude --resume en la carpeta de la sesión (Claude la busca por carpeta). Con exec, claude queda al frente de
+    la terminal y Herdr lo ve como agente (si no, ve el bash de -c y la toma por consola vacía). Devuelve si se abrió."""
     env = dict(os.environ, BK_BACKEND="herdr", BK_PROJECT=cwd,
-               WS_CHAT_CMD=f"cd {shlex.quote(cwd)} && claude --resume {shlex.quote(r['sid'])}")
+               WS_CHAT_CMD=f"cd {shlex.quote(cwd)} && exec claude --resume {shlex.quote(r['sid'])}")
     if quiet(BK, "chat", env=env) != 0:
         print("bk: no pude abrir el chat en Herdr (probá: bk chat)", file=sys.stderr)
         return False

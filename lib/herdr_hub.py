@@ -217,7 +217,7 @@ def repo(d):
     name, top = project(d)
     slug = AG.repo_of(top)
     if not slug:
-        raise Fail(f"{name} no tiene un origin de GitHub")
+        raise Fail(f"{name} no tiene un remoto de GitHub (git remote -v)")
     return name, top, slug
 
 

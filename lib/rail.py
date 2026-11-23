@@ -32,7 +32,8 @@ def in_project(path):
 
 def sh(*a, cwd=None):
     try:
-        return subprocess.run(a, capture_output=True, text=True, timeout=4, cwd=cwd).stdout
+        return subprocess.run(a, capture_output=True, text=True, timeout=4, cwd=cwd,
+                              env=dict(os.environ, GIT_OPTIONAL_LOCKS="0")).stdout   # mirar no traba el index
     except Exception:
         return ""
 

@@ -30,6 +30,16 @@ mkdir "$TMP/suelta"
 check_eq "$(side "$TMP/suelta" | jq -c '[.project, .branch, (.changes | length)]')" '["","",0]' "fuera de un repo: sin proyecto ni cambios"
 check_eq "$(side "$TMP/no-existe" | jq -c '[.project, (.changes | length)]')" '["",0]' "una carpeta que no existe no rompe"
 check_eq "$(side "$REPO" | jq -c '.profile | map(.role) | index("implementer") != null')" "true" "perfil: los roles de bk roles"
+# bk roles queda guardado: lo que está en la caché sale tal cual (sin correr bk roles) hasta que cambie un roles.yml
+RC="$HOME/.cache/bk/side/roles-$(printf %s "$REPO" | shasum | cut -c1-16).json"
+check_eq "$([ -f "$RC" ] && echo hay || echo no)" "hay" "perfil: bk roles queda en la caché del panel"
+jq '.rows = [{"role": "marca", "model": "de-la-cache", "mode": ""}]' "$RC" >"$TMP/rc" && mv "$TMP/rc" "$RC"
+check_eq "$(side "$REPO" | jq -r '.profile[0].model')" "de-la-cache" "perfil: con nada cambiado, sale de la caché"
+mkdir -p "$REPO/.barrilete"; printf 'implementer: claude/opus\n' >"$REPO/.barrilete/roles.yml"
+check_eq "$(side "$REPO" | jq -r '.profile[] | select(.role == "implementer") | .model')" "opus" "perfil: un roles.yml del proyecto nuevo invalida la caché"
+printf 'implementer: claude/haiku\n' >"$REPO/.barrilete/roles.yml"
+check_eq "$(side "$REPO" | jq -r '.profile[] | select(.role == "implementer") | .model')" "haiku" "perfil: y también si se edita"
+rm -rf "$REPO/.barrilete"
 
 # contexto: el de la sesión de Claude más reciente de esa carpeta (transcript en ~/.claude/projects/<ruta con - por todo lo que no es letra o número>)
 sesion() { # <carpeta> <archivo> <tokens de entrada> <segundos de antigüedad>
@@ -48,6 +58,25 @@ rm -f "$HOME/.config/bk/context"
 sesion "$REPO" nueva 90000 5
 check_eq "$(side "$REPO" | jq -c '.context')" '{"tokens":90000,"level":"","limit":200000}' "contexto: por debajo de 150k sin nivel"
 check_eq "$(side "$WT" | jq -c '.context')" "null" "contexto: un worktree no hereda la sesión del repo principal"
+
+# Caché de los demás worktrees (Herdr pide esto cada 4 s): la carpeta propia siempre fresca, las otras hasta
+# BK_SIDE_TTL o hasta que cambie su index, su HEAD o su carpeta. El caché vive en el HOME temporal.
+rm -f "$REPO"/f*.txt; g -C "$WT" checkout -q -- . 2>/dev/null; g -C "$WT" clean -qfd
+cambios() { side "$1" | jq -c '[.changes[] | .name + ":" + (.files | length | tostring)]'; }
+check_eq "$(cambios "$REPO")" '[]' "caché: todo limpio"
+sleep 1; echo otra >>"$WT/a.txt"   # solo contenido: no cambia ni el index ni la carpeta
+check_eq "$(cambios "$REPO")" '[]' "caché: un cambio de contenido en otro worktree espera al TTL"
+check_eq "$(cambios "$WT")" '["7:1"]' "caché: la carpeta de la terminal siempre se mira de nuevo"
+check_eq "$(cambios "$REPO")" '["7:1"]' "caché: lo que vio la terminal del worktree les sirve a las demás"
+echo otra >>"$WT/borrar.txt"
+check_eq "$(cambios "$REPO")" '["7:1"]' "caché: otro cambio de contenido sigue esperando"
+check_eq "$(BK_SIDE_TTL=0 cambios "$REPO")" '["7:2"]' "caché: con el TTL vencido se mira de nuevo"
+sleep 1; g -C "$WT" commit -qam todo
+check_eq "$(cambios "$REPO")" '[]' "caché: un commit en otro worktree (cambia su index) se ve enseguida"
+g -C "$REPO" checkout -q -- .; g -C "$REPO" status --porcelain >/dev/null; sleep 1; touch "$REPO/borrar.txt"   # misma letra, otra fecha: git querría reescribir el index
+ix=$(stat -f %m%N "$REPO/.git/index" 2>/dev/null || stat -c %Y "$REPO/.git/index")
+side "$REPO" >/dev/null
+check_eq "$(stat -f %m%N "$REPO/.git/index" 2>/dev/null || stat -c %Y "$REPO/.git/index")" "$ix" "git sin locks opcionales: mirar no reescribe el index (no le traba un commit a un agente)"
 
 echo "1..$N"
 [ "$FAILED" -eq 0 ]

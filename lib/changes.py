@@ -18,7 +18,8 @@ COUNT_MAX = 1024 * 1024   # hasta qué tamaño se cuentan las líneas de un arch
 
 def sh(*a, cwd=None):
     try:
-        return subprocess.run(a, capture_output=True, text=True, timeout=5, cwd=cwd).stdout
+        return subprocess.run(a, capture_output=True, text=True, timeout=5, cwd=cwd,
+                              env=dict(os.environ, GIT_OPTIONAL_LOCKS="0")).stdout   # mirar no traba el index
     except Exception:
         return ""
 

@@ -27,6 +27,7 @@ export default class Branches extends Panel {
   subtitle() {
     const all = (this.data.projects ?? []).flatMap((p) => p.items);
     const done = all.filter((b) => b.done).length;
+    if (this.loading && !all.length) return "";   // la primera lectura: «Leyendo…» abajo, no «0 ramas»
     return [all.length + (all.length === 1 ? " rama" : " ramas"), done ? done + " terminadas" : null].filter(Boolean).join(" · ");
   }
 

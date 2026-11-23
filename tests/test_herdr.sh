@@ -73,7 +73,7 @@ for v in "BK_BACKEND=herdr" "BARRILETE_ROLE=implementer" "BARRILETE_MODEL=sonnet
   check_eq "$(grep -cxF "$v" <<<"$A")" "1" "bk run: el agente recibe $v"
 done
 check_eq "$(st -r '.terms.t2.argv[-3:] | .[0] + " " + .[1]')" "bash -c" "bk run: el comando corre en bash -c"
-check_eq "$(st -r '.terms.t2.argv[-1]')" "claude --model sonnet '/implement-issue 7'; '$ROOT/bin/bk' _ended '$TD'" "bk run: claude con el prompt, y después cierra la tarea"
+check_eq "$(st -r '.terms.t2.argv[-1]')" "set -m; claude --model sonnet '/implement-issue 7'; '$ROOT/bin/bk' _ended '$TD'" "bk run: claude con el prompt (adelante en la terminal: set -m), y después cierra la tarea"
 check_eq "$(st -c '.terms.t2.labels | [.["bk.kind"], .["bk.win"], .["bk.project"], .["bk.role"], .["bk.ref"]]')" '["agent","i7","proj","implementer","#7"]' "bk run: la terminal queda etiquetada"
 check_eq "$(st -r '.terms.t1.labels["bk.id"] + " " + .terms.t2.labels["bk.id"]')" "1 2" "bk run: el agente toma su número de ventana al nacer, después del chat"
 check_eq "$(jq -r '.pane + " " + .state' "$STATE/bk-i7.json")" "t2 waiting" "bk run: el pre-registro anota la terminal como pane"
@@ -169,6 +169,7 @@ bk handoff --listo abc123 >/dev/null 2>&1
 check_eq "$(( $(tabs) - n0 )) $(log | grep -c 'mod.open')" "1 0" "handoff --listo, pedido por la persona: abre solo el chat nuevo, sin aviso"
 last=$(st -r '.terms | to_entries | last | .value.argv | join(" ")')
 check_eq "$(has "$last" "handoff.py' take 'abc123'")" "si" "handoff --listo: el chat nuevo arranca con el resumen de esa sesión"
+check_eq "$(has "$last" "&& exec claude -- ")" "si" "handoff --listo: claude con exec, al frente de la terminal (si no, Herdr ve el bash y lo toma por consola vacía)"
 n0=$(tabs); bk handoff --listo abc123 >/dev/null 2>&1
 check_eq "$(( $(tabs) - n0 ))" "0" "handoff --listo otra vez: no abre otro chat"
 rm -f "$BK_HANDOFF_DIR"/abc123.*
@@ -423,6 +424,12 @@ check_eq "$(log | grep -c '^hc send t2 .*handoff --pedido --sid sidB')" "1" "han
 T8=$(newtab claude); informa "$T8"; echo "{\"pane\": \"$T8\", \"state\": \"idle\"}" >"$STATE/sidE.json"; : >"$HD_FAKE/log"
 bk handoff --term "$T8" >/dev/null 2>&1
 check_eq "$(log | grep -c "^hc send $T8 .*handoff --pedido --sid sidE") $(st -r --arg t "$T8" '.terms[$t].labels["bk.kind"] // "sin"')" "1 chat" "handoff --term: adopta una terminal que bk no conocía y le pide el resumen"
+# una terminal que se abrió en otra carpeta y después hizo cd al proyecto antes de abrir claude: la adopción y el
+# «De dónde» del resumen son de la carpeta de claude (foreground), no de la de la shell
+mkdir -p "$TMP/otra"; T9=$(newtab claude); informa "$T9"; fst --arg t "$T9" --arg o "$TMP/otra" --arg r "$REPO" '.terms[$t].cwd = $o | .terms[$t].fg_cwd = $r'
+bk _adopt "$T9" >/dev/null 2>&1
+PATH="$TMP/fake:$PATH" BK_BACKEND=herdr HC_TERMINAL_ID="$T9" "$ROOT/bin/bk" handoff --pedido --sid sidF >/dev/null 2>&1
+check_eq "$(st -r --arg t "$T9" '.terms[$t].labels["bk.project"]') $(jq -r .cwd "$BK_HANDOFF_DIR/sidF.json" 2>/dev/null)" "proj $(cd "$REPO" && git rev-parse --show-toplevel)" "adopción y handoff --pedido: la carpeta de claude, no la de la shell de la terminal"
 # el agente escribe el resumen (bk handoff --pedido deja el .json; el hook corre --listo): abre el nuevo y cierra el viejo
 pedido() { PATH="$TMP/fake:$PATH" BK_BACKEND=herdr HC_TERMINAL_ID="$1" "$ROOT/bin/bk" handoff --pedido --sid "$2" >/dev/null 2>&1; echo "# resumen" >"$BK_HANDOFF_DIR/$2.md"; }
 bk handoff --term "$T4" --cerrar >/dev/null 2>&1; pedido "$T4" sidA; : >"$HD_FAKE/log"

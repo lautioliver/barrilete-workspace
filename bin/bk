@@ -603,7 +603,9 @@ launch() {
       *) die "no pude crear la tarea $tid" ;;
     esac
     env+=(-e "BK_TASK_DIR=$tdir")
-    full="$full; $(sq "$WS/bin/bk") _ended $(sq "$tdir")"
+    # set -m: el agente en su propio grupo de procesos y dueño de la terminal, así Herdr ve a claude adelante
+    # (y no a bash) aunque después venga _ended; sin eso, tras reiniciar Herdr el agente se ve como una shell
+    full="set -m; $full; $(sq "$WS/bin/bk") _ended $(sq "$tdir")"
   fi
   local pane parent
   if [ "$BACKEND" = herdr ]; then
@@ -903,7 +905,7 @@ watch() {
     fi
     lines=$(tput lines); cols=$(tput cols)
     if [ -z "$win" ]; then
-      printf '\033[H\033[2J\033[2m  %s\033[0m' "${fixed:+esperando $fixed…}"
+      printf '\033[H\033[2J\033[2m  %s\033[0m' "${fixed:+esperando ${fixed}…}"
       [ -z "$fixed" ] && printf '\033[2m  sin agentes libres para mirar (bk run / bk review)\033[0m'
       sleep 2; continue
     fi
@@ -1145,7 +1147,7 @@ chat_from() {
   local q="$1" row sid dir acct old
   [ -n "$q" ] || die "bk chat --desde <número de workspace|sesión>   (los resumenes listos: bk handoff --listos)"
   row=$(python3 "$WS/lib/handoff.py" find "$q") \
-    || die "no hay un resumen listo de «$q» (bk handoff $q lo pide; los listos: bk handoff --listos)"
+    || die "no hay un resumen listo de «${q}» (bk handoff $q lo pide; los listos: bk handoff --listos)"
   IFS=$'\t' read -r sid dir acct old <<<"$row"
   [ -d "$dir" ] || die "la carpeta del resumen ya no existe: $dir"
   local top base k=2; top=$(project_top "$dir"); base="bk-$(project_of "$top")"

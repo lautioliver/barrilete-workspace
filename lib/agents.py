@@ -24,6 +24,7 @@ import subprocess
 import sys
 import time
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 
 import tasks as TK   # tareas de los agentes (ADR-005 del kit): estado final, propuestas y cola de bk say
 import gentle as G   # paleta del tema, la misma que el riel
@@ -38,10 +39,22 @@ R, DIM, BOLD = "\033[0m", "\033[2m", "\033[1m"
 ROSE, AMBER, GREEN, IRIS = G.ROSE, G.AMBER, G.GREEN, G.IRIS
 
 
+_HC_HUNG = []   # Herdr no respondió a tiempo en esta corrida: no se lo vuelve a esperar
+
+
 def sh(*args, timeout=5):
+    """La salida del comando, o "" si falla. Si hc (Herdr) no responde a tiempo una vez, las demás llamadas a hc de
+    esta corrida devuelven "" enseguida: con Herdr colgado, bk ls y los paneles no suman una espera por terminal."""
+    hc = bool(args) and args[0] == HC
+    if hc and _HC_HUNG:
+        return ""
     try:
         return subprocess.run(args, capture_output=True, text=True, timeout=timeout).stdout
-    except (OSError, subprocess.SubprocessError):
+    except subprocess.TimeoutExpired:
+        if hc:
+            _HC_HUNG.append(True)
+        return ""
+    except Exception:   # OSError, un argumento roto: como si no hubiera respondido
         return ""
 
 
@@ -113,9 +126,15 @@ def load_titles():
 
 
 def repo_of(cwd):
-    url = sh("git", "-C", cwd, "remote", "get-url", "origin").strip()
-    m = re.search(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?$", url)
-    return m.group(1) if m else ""
+    """owner/repo del primer remoto de GitHub: origin primero, después cualquiera (workspace usa «respaldo»;
+    con solo origin, alt+i y alt+r decían «no tiene un origin de GitHub»). "" sin ninguno."""
+    names = sh("git", "-C", cwd, "remote").split()
+    for r in sorted(names, key=lambda n: n != "origin"):
+        url = sh("git", "-C", cwd, "remote", "get-url", r).strip()
+        m = re.search(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?$", url)
+        if m:
+            return m.group(1)
+    return ""
 
 
 def pr_of_branch(cwd, titles, fetch=True):
@@ -145,8 +164,7 @@ def pr_of_branch(cwd, titles, fetch=True):
 
 def save_titles(titles):
     try:
-        os.makedirs(os.path.dirname(TITLES), exist_ok=True)
-        json.dump(titles, open(TITLES, "w"), ensure_ascii=False)
+        G.save_json(TITLES, titles, ensure_ascii=False)
     except OSError:
         pass
 
@@ -353,6 +371,17 @@ def machines():
     return [m["name"] for m in ms if m.get("name") and m.get("state") == "connected"]
 
 
+def _remote_ask(m, now):
+    """Los estados de la máquina m. Sin sh(): que una remota no responda no dice que el Herdr de acá esté colgado."""
+    try:
+        r = subprocess.run([HC, "exec", "--on", m, "--timeout", REMOTE_TIMEOUT, "bk", "_states"],
+                           capture_output=True, text=True, timeout=float(REMOTE_TIMEOUT) + 2)
+        got = json.loads(r.stdout)
+        return {"at": now, "ok": True, "states": [s for s in got if isinstance(s, dict)]}
+    except (ValueError, TypeError, OSError, subprocess.TimeoutExpired):   # apagada, sin bk o respondió otra cosa
+        return {"at": now, "ok": False, "states": []}
+
+
 def remote_states():
     """{<máquina>/<pane>: estado} de las otras máquinas, con una caché corta por máquina."""
     if backend() != "herdr" or os.environ.get("BK_REMOTE") == "0":
@@ -361,18 +390,25 @@ def remote_states():
         cache = json.load(open(REMOTE))
     except (OSError, ValueError):
         cache = {}
-    out, now, dirty = {}, time.time(), False
-    for m in machines():
+    if not isinstance(cache, dict):   # un archivo pisado a mano o a medio escribir no rompe bk ls
+        cache = {}
+    cache = {k: v for k, v in cache.items() if isinstance(v, dict)}
+    out, now = {}, time.time()
+    ms = machines()
+    def fresh(c):
+        at = c.get("at") if isinstance(c.get("at"), (int, float)) else 0
+        return now - at < (REMOTE_TTL if c.get("ok") else min(REMOTE_RETRY, REMOTE_TTL * 6))
+    due = [m for m in ms if not cache.get(m) or not fresh(cache[m])]
+    if due:   # a la vez: dos máquinas colgadas no suman dos esperas (pasaban los 8 s que esperan los mods)
+        with ThreadPoolExecutor(max_workers=min(len(due), 8)) as pool:
+            for m, c in zip(due, pool.map(lambda m: _remote_ask(m, now), due)):
+                cache[m] = c
+    dirty = bool(due)
+    for m in ms:
         c = cache.get(m) or {}
-        if not c or now - c.get("at", 0) >= (REMOTE_TTL if c.get("ok") else min(REMOTE_RETRY, REMOTE_TTL * 6)):
-            try:
-                got = json.loads(sh(HC, "exec", "--on", m, "--timeout", REMOTE_TIMEOUT, "bk", "_states",
-                                    timeout=float(REMOTE_TIMEOUT) + 2))
-                c = {"at": now, "ok": True, "states": [s for s in got if isinstance(s, dict)]}
-            except (ValueError, TypeError):   # apagada, sin bk o respondió otra cosa
-                c = {"at": now, "ok": False, "states": []}
-            cache[m], dirty = c, True
         for st in c.get("states") or []:
+            if not isinstance(st, dict):
+                continue
             p = st.get("pane") or ""
             if p and "/" not in p:
                 st = dict(st, pane=f"{m}/{p}", _machine=m)
