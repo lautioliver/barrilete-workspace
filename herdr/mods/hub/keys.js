@@ -7,12 +7,13 @@ import { h_flex } from "gpui-base";
 import { keys, commands, run, shared, props, notify } from "herdr";
 import { Panel, rank, chips, lit } from "./kit.js";
 
-const KIT = "Agentes del kit", CHATS = "Chats", IR = "Ir", VER = "Ver", VENTANA = "Ventana y panes", TERMINAL = "Terminal";
-const GROUPS = [KIT, CHATS, IR, VER, VENTANA, TERMINAL];
+const INICIO = "Para empezar", KIT = "Agentes del kit", CHATS = "Chats", IR = "Ir", VER = "Ver", VENTANA = "Ventana y panes", TERMINAL = "Terminal";
+const GROUPS = [INICIO, KIT, CHATS, IR, VER, VENTANA, TERMINAL];
 
 // acción de keys.json → [grupo, qué hace]. El orden de acá es el orden dentro de cada grupo.
 const NAMES = {
-  "mod.open:bk-palette": [KIT, "Comandos"],
+  "mod.open:bk-palette": [INICIO, "Comandos: todo lo que hace bk"],
+  "mod.open:bk-keys": [INICIO, "Esta hoja"],
   "mod.open:bk-issues": [KIT, "Implementar un issue"],
   "mod.open:bk-prs": [KIT, "Revisar o corregir un PR"],
   "mod.open:bk-tasks": [KIT, "Te esperan: tareas y aprobaciones"],
@@ -40,7 +41,6 @@ const NAMES = {
   "mod.open:bk-ayuda": [VER, "Piola: el ayudante del workspace (Codex)"],
   "mod.open:bk-song": [VER, "Radio"],
   "mod.open:bk-look": [VER, "Aspecto"],
-  "mod.open:bk-keys": [VER, "Esta hoja"],
   "layout.toggle:sidebar": [VER, "Mostrar u ocultar la barra izquierda"],
   "layout.toggle:lado": [VER, "Mostrar u ocultar el panel derecho"],
   "layout.switch": [VER, "Siguiente layout"],
