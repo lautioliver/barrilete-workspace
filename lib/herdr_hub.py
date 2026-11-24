@@ -797,15 +797,24 @@ def song(args):
 # ---------- barra de estado ----------
 def account_of(AG, term, name):
     """La cuenta de Claude (bk account) de esa terminal de Herdr; sin terminal, la de este entorno o la del chat
-    principal del proyecto. None: la de siempre."""
+    principal del proyecto. None: la de siempre; vacío: no corresponde mostrar una cuenta de Claude."""
     def label(addr):
         try:
-            return (json.loads(AG.sh(AG.HC, "get", addr, "--json") or "{}").get("labels") or {})
+            data = json.loads(AG.sh(AG.HC, "get", addr, "--json") or "{}")
+            return {**(data.get("labels") or {}), "_app": (data.get("status") or {}).get("app")}
         except ValueError:
             return {}
 
     if term:
-        acct = label(term).get("bk.account")
+        lab = label(term)
+        if lab.get("_app") == "codex":
+            return ""
+        # Los popups pertenecen al espacio; no tienen un login de Claude propio.
+        if lab.get("bk.kind") == "popup":
+            import accounts as ACC
+            chosen = ACC.spaces().get(name, {}).get("claude")
+            return named(chosen) if chosen and ACC.provider(chosen) == "claude" else ""
+        acct = lab.get("bk.account")
     else:
         acct = os.environ.get("BK_ACCOUNT_CLAUDE")
         if not acct:
@@ -849,9 +858,9 @@ def status(args):
             out["branch"], st = branch_of(st[0][3:]), st[1:]
         out["dirty"] = len(st)
     th.join()
-    out["account"] = acct[0] if acct else None
+    out["account"] = named(acct[0]) if acct else None
     import accounts as ACC
-    out["email"] = ACC.email(out["account"])
+    out["email"] = None if acct == [""] else ACC.email(out["account"])
     by = {}
     for t in TK.tasks():
         by[t.get("status")] = by.get(t.get("status"), 0) + 1

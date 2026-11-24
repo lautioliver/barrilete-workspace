@@ -396,7 +396,7 @@ dbl=$(grep -c 'on_mouse_down("left", (e) => { if (e.click_count === 2 && a.tab) 
 echo "ok - agentes: doble clic en una fila abre Renombrar de su pestaña"
 # La cuenta en la barra y en el panel lado: el mail que dan bk _hub status y bk _side (--account de la terminal)
 B="$ROOT/herdr/mods/barra/main.js"; LD="$ROOT/herdr/mods/lado/main.js"
-c1=$(grep -c 'when(Boolean(d?.account || d?.email)' "$B"); c2=$(grep -c 'child(d.email)' "$B"); c3=$(grep -c 'svg("mods/bk-barra/cuenta.svg")' "$B")
+c1=$(grep -c 'when(Boolean(d?.account || d?.email)' "$B"); c2=$(grep -c 'child(d?.email || d?.account)' "$B"); c3=$(grep -c 'svg("mods/bk-barra/cuenta.svg")' "$B")
 c4=$(grep -c '...(acct ? \["--account", acct\] : \[\])' "$LD"); c5=$(grep -c 'child(d.email || ' "$LD")
 c6=$(ls "$ROOT/herdr/mods/barra/cuenta.svg" "$ROOT/herdr/mods/lado/cuenta.svg" 2>/dev/null | wc -l | tr -d ' ')
 [ "$c1$c2$c3$c4$c5$c6" = "111112" ] || { echo "not ok - la cuenta: la barra o el panel lado no muestran el mail ($c1$c2$c3$c4$c5$c6)"; exit 1; }

@@ -54,7 +54,7 @@ export default class Barra extends View {
       this.busy = true;
       try {
         // La cuenta es la de la terminal que mirás si es un chat o agente de bk; si no, la del chat del proyecto
-        const mine = term && terminals().find((x) => x.address === term)?.labels?.["bk.kind"] ? ["--terminal", term] : [];
+        const mine = term ? ["--terminal", term] : [];
         const r = await exec(bin(), ["_hub", "status", dir, ...mine], { cwd: home(), timeout: 8000 });
         this.data = r.code === 0 ? JSON.parse(r.stdout) : null;
       } catch (_e) {
@@ -157,8 +157,7 @@ export default class Barra extends View {
         .when(Boolean(d?.dirty), (x) => x.child(div().text_color(t.blocked).child("±" + d.dirty)))))
       .when(Boolean(d?.account || d?.email), (el) => el.child(seg("b-account", "bk-cuentas", `Cuenta de Claude de esta terminal${d?.account ? ` (bk account ${d.account})` : ""} · cambiarla`)
         .child(svg("mods/bk-barra/cuenta.svg").size(12).flex_none().text_color(d?.account ? t.working : t.dim))
-        .when(Boolean(d?.account), (x) => x.child(div().font_medium().text_color(t.working).child(d.account)))
-        .when(Boolean(d?.email), (x) => x.child(div().max_w(240).truncate().text_color(t.dim).child(d.email)))))
+        .child(div().max_w(240).truncate().text_color(d?.account ? t.working : t.dim).child(d?.email || d?.account))))
       .child(div().flex_1())
       .when(esperan > 0, (el) => el.child(seg("b-wait", "bk-tasks", "Lo que espera por vos").bg(al(t.blocked, "1f")).child(mark(t, "blocked"))
         .child(div().font_medium().text_color(t.blocked).child(esperan + (esperan === 1 ? " te espera" : " te esperan")))))

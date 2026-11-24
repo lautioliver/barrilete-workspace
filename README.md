@@ -312,8 +312,9 @@ cabecera (número, programa, qué hace, carpeta y rama). A la derecha, tres pest
 (sesión y GitHub); TODO, los pasos del issue del chat que mirás (`alt+t`); y Cambios, lo sin commitear, con el diff de
 cada archivo en un popup al hacerle clic (`alt+g`). `alt+.` esconde el panel. Abajo, la barra de estado: proyecto, rama, cuenta, qué te espera, uso de hoy, CPU y memoria de cada computadora (`cpu 3%  mem 56%`), radio y las
 teclas de comandos y de la hoja de teclas. La cuenta es la de Claude de la terminal que mirás: su mail (de su
-`.claude.json`, sin preguntarle a Claude) y, si no es la de siempre, el nombre de `bk account` delante; el panel
-derecho muestra lo mismo. Un clic en ella abre el panel Cuentas para cambiarla. La marca de estado es la misma en todos, con los colores `blocked`, `done` y `working`
+`.claude.json`, sin preguntarle a Claude), una sola vez; si no hay mail, muestra el nombre de `bk account`.
+En un popup muestra la cuenta elegida para el espacio, no el login principal de Claude. El panel derecho muestra
+la cuenta de su terminal. Un clic en ella abre el panel Cuentas para cambiarla. La marca de estado es la misma en todos, con los colores `blocked`, `done` y `working`
 del tema: en `bk-neon`, ámbar te espera, verde listo y rosa trabajando.
 
 **Espacios en carpetas.** La lista de espacios se ordena a mano y se agrupa en carpetas de un nivel. El botón de
