@@ -306,7 +306,7 @@ eventos, en `~/.local/state/bk/tasks/<proyecto>/<id>/` (`task.json` y `events.js
 
 `bk backend herdr` instala también `bk-lavanda`. Activarlo:
 `herdr-app do layout.switch --name bk-lavanda`.
-A la izquierda, la marca, los espacios y los agentes, cada uno con el chip de su número de ventana y su marca de
+A la izquierda, la marca (un barrilete de silueta simple, con fondo del color del estado), los espacios y los agentes, cada uno con el chip de su número de ventana y su marca de
 estado; angosta queda en un riel con solo los chips. En el centro, las pestañas y los panes, cada pane con su
 cabecera (número, programa, qué hace, carpeta y rama). A la derecha, tres pestañas: Estado, con dos tarjetas
 (sesión y GitHub); TODO, los pasos del issue del chat que mirás (`alt+t`); y Cambios, lo sin commitear, con el diff de

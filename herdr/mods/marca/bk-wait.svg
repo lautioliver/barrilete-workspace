@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 140" width="160" height="140" role="img" aria-label="Barrilete: te esperan">
-<title>Barrilete: te esperan</title>
-<rect x="0" y="10" width="64" height="14" rx="7" fill="#14161A"/><rect x="96" y="10" width="64" height="14" rx="7" fill="#14161A"/><rect x="20" y="30" width="120" height="98" rx="40" fill="#14161A"/><circle cx="62" cy="74" r="15" fill="#FFD76A"/><circle cx="98" cy="74" r="15" fill="#FFD76A"/><circle cx="62" cy="74" r="5" fill="#14161A"/><circle cx="98" cy="74" r="5" fill="#14161A"/><rect x="66" y="118" width="28" height="16" rx="5" fill="#B4122B"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Barrilete">
+  <title>Barrilete</title>
+  <path d="M17 2 28 12 17 23 7 12Z" fill="#14161A"/>
+  <path d="M17 5v15M10 12h15" fill="none" stroke="#FFFFFF" stroke-opacity=".8" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M17 23c0 4-5 2-5 5s-5 3-8 1" fill="none" stroke="#14161A" stroke-width="2.2" stroke-linecap="round"/>
 </svg>

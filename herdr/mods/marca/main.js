@@ -96,8 +96,7 @@ export default class Marca extends View {
     const list = agents();
     const waiting = list.filter((a) => a.status === "blocked").length;
     const working = list.filter((a) => a.status === "working").length;
-    // El barrilete de la marca dice cómo está todo: ojos ámbar sobre fondo ámbar si alguien te espera,
-    // despierto si hay agentes trabajando, con los ojos cerrados si todo está quieto. Sin animación: no gasta.
+    // Silueta de barrilete legible a 20 px; el fondo indica si alguien espera. Sin animación.
     const mood = waiting ? "wait" : working ? "fly" : "rest";
     const tip = waiting ? `Barrilete Kit · ${waiting === 1 ? "1 agente te espera" : waiting + " agentes te esperan"}` : working ? `Barrilete Kit · ${working} trabajando` : "Barrilete Kit · todo quieto";
     // Arrastrada a un ancho intermedio, la fila deja primero el nombre y después la lupa.
