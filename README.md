@@ -259,7 +259,7 @@ caída, así que la lista puede traer chats que cerraste a propósito: para eso 
 
 - `bk run` reusa el kit: `routing.py` elige el rol y `prepare.sh --worktree` asigna el issue y crea el worktree.
 - `roles.yml` dice qué provider/modelo corre cada rol; un proyecto lo pisa con `.barrilete/roles.yml`.
-- Perfiles de modelos (`bk profile`, `profiles.yml`): un juego de provider/modelo por rol (`normal`, `barato`, `a-fondo`)
+- Perfiles de modelos (`bk profile`, `profiles.yml`): un juego de provider/modelo por rol (`normal`, `barato`, `a-fondo`, `codex`)
   que se cambia de una vez y vale para todos los proyectos. `bk profile barato` lo elige y `bk profile off` vuelve a
   `roles.yml`; en `alt+k` hay un renglón «Usar el perfil …» por perfil y «Perfiles de modelos y tareas…» abre el panel
   (→ edita un perfil, enter en un rol elige el modelo, «Otro…» acepta cualquier `provider/modelo`, así un perfil mezcla
@@ -280,7 +280,14 @@ caída, así que la lista puede traer chats que cerraste a propósito: para eso 
   sesión iniciada (`bk models --providers`): claude y codex según sus cuentas (`bk account`), gemini si tiene clave
   (variable de entorno, `~/.gemini/oauth_creds.json` o el llavero; solo se mira que exista).
 - `--dry-run` en cualquier comando de agentes, y en `bk ws` y `bk chat` (también `--rama`, `--suelto` y `--desde`), muestra qué haría sin lanzar ni abrir nada.
-- Provider `codex`: preparado pero sin probar. Las barandas y los eventos de las tareas le llegan por el `.codex/hooks.json`
+- Perfiles de Codex (`codex/`, `bk codex`): `bk codex install` copia a `~/.codex` tres perfiles que gastan menos tokens
+  (`bk-orquestador`, `bk-implementador`, `bk-liviano`; las cuentas de `bk account` los ven por symlink) y `bk codex`
+  dice si están al día. Un agente `codex` arranca con el de su rol (`codex -p bk-implementador -m <modelo>`: el modelo
+  sigue saliendo del perfil de bk); sin el archivo instalado, sin `-p`. Apagan plugins, apps, navegador, computer use e
+  imágenes, que se mandan en cada llamada: el contexto de un turno baja de 21,9k a 14,9k–18,6k tokens (medido con
+  Codex 0.170; detalle en `codex/README.md`). `bk ask` no los usa (`imagenes` necesita generar imágenes). El perfil de
+  bk `codex` pone el implementer en `codex/gpt-6.2-sol` y deja el resto en Claude.
+- Provider `codex`: los perfiles se probaron con `codex exec`; lanzar un agente `codex` desde bk, todavía no. Las barandas y los eventos de las tareas le llegan por el `.codex/hooks.json`
   del proyecto (los trae el kit), pero no está verificado que Codex los dispare igual que Claude Code.
 
 - `bk song` reproduce radios de techno/house en segundo plano con mpv (`bk song help`); un género que no está en la lista se busca en radio-browser.info.

@@ -1,0 +1,17 @@
+# Perfil de Codex para implementar un issue: razonamiento bajo, respuestas cortas, sin subagentes propios.
+model = "gpt-6.2-sol"
+model_reasoning_effort = "low"
+model_reasoning_summary = "none"
+model_verbosity = "low"
+tool_output_token_limit = 8000
+
+[agents]
+enabled = false
+
+# Sin herramientas que un agente de código no usa: cada una se manda en cada llamada (~5k tokens medidos).
+[features]
+plugins = false
+apps = false
+browser_use = false
+computer_use = false
+image_generation = false

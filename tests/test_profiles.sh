@@ -14,7 +14,7 @@ CONF="$HOME/.config/bk"
 REPO_SUM=$(shasum "$ROOT/profiles.yml")
 
 check_eq "$(spec implementer) $(spec reviewer)" "claude/sonnet claude/sonnet" "sin perfil: los modelos de roles.yml"
-check_eq "$("$B" profile --json | jq -c '[.active, (.profiles | map(.name))]')" '[null,["normal","barato","a-fondo"]]' "de fábrica: normal, barato y a-fondo, ninguno activo"
+check_eq "$("$B" profile --json | jq -c '[.active, (.profiles | map(.name))]')" '[null,["normal","barato","a-fondo","codex"]]' "de fábrica: normal, barato, a-fondo y codex, ninguno activo"
 
 "$B" profile barato >/dev/null
 check_eq "$(cat "$CONF/profile")" "barato" "bk profile <nombre> guarda el activo"
@@ -66,7 +66,7 @@ rm "$CONF/profiles.yml"; "$B" profile normal >/dev/null
 "$B" profile set Mal reviewer claude/opus >/dev/null 2>&1; rc5=$?
 check_eq "$rc1$rc2$rc3$rc4$rc5 $(cat "$CONF/profile") $([ -e "$CONF/profiles.yml" ] && echo copia || echo sin)" "11111 normal sin" "perfil, provider, rol, modelo o nombre inválidos: error y nada cambia"
 "$B" profile rm normal >/dev/null 2>&1; rc=$?
-check_eq "$rc $("$B" profile --json | jq -r '.profiles | map(.name) | join(",")')" "1 normal,barato,a-fondo" "no borra el activo"
+check_eq "$rc $("$B" profile --json | jq -r '.profiles | map(.name) | join(",")')" "1 normal,barato,a-fondo,codex" "no borra el activo"
 
 # new y rm
 "$B" profile new viaje a-fondo >/dev/null; "$B" profile set viaje implementer codex/gpt-5-codex >/dev/null 2>&1
@@ -74,7 +74,7 @@ check_eq "$("$B" profile --json | jq -c '.profiles[] | select(.name == "viaje") 
 "$B" profile new viaje >/dev/null 2>&1; rc=$?
 check_eq "$rc" "1" "new no pisa uno que existe"
 "$B" profile rm barato >/dev/null
-check_eq "$("$B" profile --json | jq -r '.profiles | map(.name) | join(",")') $(grep -c '^$' "$CONF/profiles.yml")" "normal,a-fondo,viaje 3" "rm saca el bloque y deja un solo hueco entre perfiles"
+check_eq "$("$B" profile --json | jq -r '.profiles | map(.name) | join(",")') $(grep -c '^$' "$CONF/profiles.yml")" "normal,a-fondo,codex,viaje 4" "rm saca el bloque y deja un solo hueco entre perfiles"
 check_eq "$("$B" profile --json | jq -c '.profiles[] | select(.name == "a-fondo") | .roles | length')" "5" "rm no se lleva el perfil de al lado"
 
 "$B" profile off >/dev/null

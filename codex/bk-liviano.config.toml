@@ -1,0 +1,17 @@
+# Perfil de Codex para tareas chicas y repetidas (explorar, resumir, revisar): Luna, salida corta.
+model = "gpt-6-luna"
+model_reasoning_effort = "medium"
+model_reasoning_summary = "none"
+model_verbosity = "low"
+tool_output_token_limit = 6000
+
+[agents]
+enabled = false
+
+# Sin herramientas que un agente de código no usa: cada una se manda en cada llamada (~5k tokens medidos).
+[features]
+plugins = false
+apps = false
+browser_use = false
+computer_use = false
+image_generation = false

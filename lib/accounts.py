@@ -34,7 +34,8 @@ SHARED = {
     "claude": ["projects/", "settings.json", "CLAUDE.md", "barrilete-lessons.md", "skills", "plugins",
                "hooks", "agents", "commands", "output-styles", "history.jsonl", "file-history", "todos",
                "plans", "shell-snapshots", "session-env", "keybindings.json"],
-    "codex": ["sessions/", "config.toml", "AGENTS.md", "hooks.json", "rules", "prompts", "history.jsonl"],
+    "codex": ["sessions/", "config.toml", "AGENTS.md", "hooks.json", "rules", "prompts", "history.jsonl",
+              "bk-orquestador.config.toml", "bk-implementador.config.toml", "bk-liviano.config.toml"],
 }
 # De ~/.claude.json, lo que no es de la cuenta: proyectos confiados, MCP del usuario, tema.
 SEED_KEYS = ("projects", "mcpServers", "theme")

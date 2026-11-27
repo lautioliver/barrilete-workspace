@@ -1,6 +1,6 @@
 # Qué provider/modelo corre cada rol de Barrilete Kit.
 # Formato: <rol>: <provider>/<modelo> [modo]
-#   provider: claude (Claude Code)  |  codex (Codex CLI, todavía sin probar)
+#   provider: claude (Claude Code)  |  codex (Codex CLI, con el perfil de Codex de su rol: codex/, bk codex install)
 #   modelo:   lo que acepte el CLI (claude: haiku, sonnet, opus o un id completo)
 #   modo:     cómo lo lanza el orquestador (bk mode <rol>):
 #               main  la sesión principal (no se lanza)

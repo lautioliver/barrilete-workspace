@@ -7,7 +7,7 @@
 # Formato:
 #   <perfil>:
 #     <rol>: <provider>/<modelo>
-#   provider: claude (Claude Code) | codex (Codex CLI, todavía sin probar)
+#   provider: claude (Claude Code) | codex (Codex CLI, con el perfil de Codex de su rol: codex/, bk codex install)
 #   modelo:   lo que acepte el CLI (claude: haiku, sonnet, opus o un id completo)
 #
 # Solo modelos: el modo (main | bk | sub) sale siempre de roles.yml. Un rol que el perfil no nombra también
@@ -33,3 +33,11 @@ a-fondo:
   implementer: claude/opus
   implementer-light: claude/sonnet
   reviewer: claude/opus
+
+# Claude orquesta y revisa; Codex implementa (con el perfil bk-implementador de codex/, bk codex install).
+codex:
+  planner: claude/opus
+  orchestrator: claude/opus
+  implementer: codex/gpt-6.2-sol
+  implementer-light: claude/haiku
+  reviewer: claude/sonnet
