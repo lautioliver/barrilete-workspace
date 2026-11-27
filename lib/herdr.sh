@@ -146,7 +146,7 @@ hd_launch() {
 # nueva queda en HD_NEW_TERM.
 hd_chat() {
   local ws="$1" space="$2" tab="$3" dir="$4" top="$5" t kv CTA envv=()
-  account_args claude
+  [ "${BK_CHAT_PROVIDER:-cc}" = cc ] && account_args claude || CTA=()
   for kv in "${CTA[@]+"${CTA[@]}"}"; do [ "$kv" = -e ] || envv+=("$kv"); done
   hd_up
   tab="${BK_WS_NAME:-${HD_TAB:-$tab}}"
@@ -158,8 +158,8 @@ hd_chat() {
           env BK_BACKEND=herdr "BK_PROJECT=$top" "${envv[@]+"${envv[@]}"}" claude) || exit 1
   fi
   HD_NEW_TERM="$t"
-  local lab=(bk.kind=chat "bk.win=$ws" "bk.project=$(project_of "$top")") cta
-  cta=$(account_of claude); [ -z "$cta" ] || lab+=("bk.account=$cta")
+  local lab=(bk.kind=chat "bk.win=$ws" "bk.project=$(project_of "$top")" "bk.provider=${BK_CHAT_PROVIDER:-cc}") cta
+  if [ "${BK_CHAT_PROVIDER:-cc}" = cc ]; then cta=$(account_of claude); [ -z "$cta" ] || lab+=("bk.account=$cta"); fi
   [ -z "${BK_WS_NAME:-}" ] || lab+=("bk.name=$BK_WS_NAME")
   lab+=("${HD_LABELS[@]+"${HD_LABELS[@]}"}")
   hd_hc label "$t" "${lab[@]}" >/dev/null 2>&1 || info "(no pude etiquetar el chat $ws: bk ls no lo va a mostrar)"
@@ -270,6 +270,7 @@ hd_chat_cmd() {
     esac
   done
   if [ -n "$from" ]; then hd_chat_from "$from"; return; fi
+  choose_chat_provider || die "no se eligió proveedor para el chat"
   if [ -n "$dir" ]; then
     # Un chat en esa carpeta (el worktree de una rama, desde alt+b): su espacio <proyecto>-<carpeta>, como --rama
     [ -d "$dir" ] || die "no existe la carpeta $dir"

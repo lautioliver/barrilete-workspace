@@ -103,7 +103,7 @@ cambió en el repo. Un layout, un tema o una tecla que retocaste quedan como est
 pisan con los del repo (se editan acá).
 
 - **Un espacio por proyecto**: `bk` en la carpeta del proyecto abre (o muestra) el espacio `<proyecto>` con su
-  chat en la pestaña `chat`. `bk chat` suma otra pestaña (`chat-2`…), `bk chat --rama X` abre el espacio
+  chat en la pestaña `chat`. `bk chat` pregunta qué proveedor usar (`agy`, `codex`, `cc` o `cursor`) y suma otra pestaña (`chat-2`…); `bk chat --rama X` abre el espacio
   `<proyecto>-<x>` en su worktree y `bk chat --suelto` va al espacio `chats`.
 - **Una pestaña por agente**: `bk run`, `fix`, `review`, `plan` y `orchestrate` lanzan al agente en una pestaña
   del espacio de su proyecto (`i42`, `pr57`…) sin sacarte de la que estás mirando. Herdr muestra su estado.
@@ -170,7 +170,7 @@ pisan con los del repo (se editan acá).
   | `alt+,` | Aspecto: tema, paneles, tamaño y fuente de la terminal | |
   | `alt+1…9` | Ir a la ventana con ese número fijo | |
   | `alt+shift+1…9` | Ir al agente N del espacio que mirás, en el orden de las pestañas | |
-  | `alt+c` | Chat nuevo en el proyecto que mirás, sin menú | `bk chat` |
+  | `alt+c` | Chat nuevo en el proyecto que mirás; pregunta el proveedor (`agy`, `codex`, `cc` o `cursor`) | `bk chat` |
   | `alt+j` | Ir al próximo que te espera: primero los que preguntan, después los que terminaron; cada pulsación pasa al siguiente | |
   | `alt+0` | Volver a la pestaña donde estabas | |
   | `alt+q` | Volver al chat del espacio | |

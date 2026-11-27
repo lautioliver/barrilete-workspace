@@ -995,7 +995,9 @@ workspace() {
     # El chat sobrevive a un /exit: vuelve a una shell en la misma carpeta
     # La cuenta de donde se abre (bk account use, o BK_ACCOUNT=x bk) pasa a la sesión nueva; new-session -e
     # también la deja en el entorno de la sesión, como bk account use
-    local CTA cx; account_args claude; cx=$(account_of codex)
+    local CTA cx
+    if [ "${BK_CHAT_PROVIDER:-cc}" = cc ]; then account_args claude; else CTA=(); fi
+    cx=$(account_of codex)
     chat=$(tmux new-session -d -P -F '#{pane_id}' -s "$WS_SESSION" -n main -c "$dir" -x "$cols" -y "$lines" \
            -e "BK_PROJECT=$top" "${CTA[@]+"${CTA[@]}"}" "${WS_CHAT_CMD:-claude}; exec \$SHELL")
     [ ${#CTA[@]} -eq 0 ] || tmux set-option -t "$WS_SESSION" @bk_account_claude "$(account_of claude)"
@@ -1299,6 +1301,23 @@ chat_branch_wt() {
   CHAT_SLUG="$slug"; CHAT_WT="$wt"
 }
 
+# Cada chat nuevo elige su CLI; los nombres son una lista cerrada para no evaluar texto ingresado.
+choose_chat_provider() {
+  local choice
+  [ -n "${BK_CHAT_PROVIDER:-}" ] && return 0
+  while :; do
+    printf 'Proveedor del chat nuevo: [1] agy  [2] codex  [3] cc  [4] cursor: ' >/dev/tty
+    IFS= read -r choice </dev/tty || return 1
+    case "$choice" in
+      1|agy) BK_CHAT_PROVIDER=agy; WS_CHAT_CMD=agy; return 0 ;;
+      2|codex) BK_CHAT_PROVIDER=codex; WS_CHAT_CMD=codex; return 0 ;;
+      3|cc) BK_CHAT_PROVIDER=cc; WS_CHAT_CMD=claude; return 0 ;;
+      4|cursor) BK_CHAT_PROVIDER=cursor; WS_CHAT_CMD=cursor-agent; return 0 ;;
+      *) printf 'Elegí 1, 2, 3 o 4.\n' >/dev/tty ;;
+    esac
+  done
+}
+
 cmd_chat() {
   if [ "$BACKEND" = herdr ]; then hd_chat_cmd "$@"; return; fi
   set +euo pipefail
@@ -1309,12 +1328,14 @@ cmd_chat() {
       --desde) chat_from "${2:-}"; return ;;
       --nombre) export BK_WS_NAME="${2:?--nombre necesita un nombre}"; shift 2 ;;
       --rama) want_branch=1; branch="${2:-}"; [ $# -ge 2 ] && shift 2 || shift ;;
-      --carpeta) local dir="${2:?--carpeta necesita una carpeta}"; [ -d "$dir" ] || die "no existe la carpeta $dir"
+      --carpeta) choose_chat_provider || die "no se eligió proveedor para el chat"
+                 local dir="${2:?--carpeta necesita una carpeta}"; [ -d "$dir" ] || die "no existe la carpeta $dir"
                  top=$(project_top "$dir"); WS_SESSION="bk-$(project_of "$top")-$(basename "$dir")"
                  workspace "$dir"; return ;;
       *) break ;;
     esac
   done
+  choose_chat_provider || die "no se eligió proveedor para el chat"
   local s="${1:-$(tmux display-message -p '#{session_name}' 2>/dev/null)}" top name n pane
   if [ "$want_branch" = 1 ] && [ "$loose" = 0 ]; then
     [ -n "${branch// /}" ] || die "bk chat --rama <nombre del cambio>"
