@@ -1307,7 +1307,7 @@ choose_chat_provider() {
   [ -n "${BK_CHAT_PROVIDER:-}" ] && return 0
   # Los scripts y el modo dry-run no tienen una persona que pueda responder el menú.
   if [ "$DRY" -eq 1 ] || [ ! -t 0 ]; then
-    BK_CHAT_PROVIDER=cc; WS_CHAT_CMD=claude; return 0
+    BK_CHAT_PROVIDER="${BK_CHAT_PROVIDER:-cc}"; WS_CHAT_CMD="${WS_CHAT_CMD:-claude}"; return 0
   fi
   while :; do
     printf 'Proveedor del chat nuevo: [1] agy  [2] codex  [3] cc  [4] cursor: ' >/dev/tty
