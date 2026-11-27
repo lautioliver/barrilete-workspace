@@ -145,8 +145,16 @@ hd_launch() {
 # HD_TAB (un nombre automático de la pestaña) y HD_LABELS (etiquetas de más) los pone hd_chat_from; la terminal
 # nueva queda en HD_NEW_TERM.
 hd_chat() {
-  local ws="$1" space="$2" tab="$3" dir="$4" top="$5" t kv CTA envv=()
-  [ "${BK_CHAT_PROVIDER:-cc}" = cc ] && account_args claude || CTA=()
+  local ws="$1" space="$2" tab="$3" dir="$4" top="$5" t kv CTA envv=() provider="${HD_PROVIDER:-${BK_CHAT_PROVIDER:-cc}}" account_provider launch="${WS_CHAT_CMD:-}"
+  [ "$provider" = claude ] && provider=cc
+  case "$provider" in
+    cc) account_provider=claude; account_args claude ;;
+    codex) account_provider=codex; account_args codex ;;
+    *) account_provider=""; CTA=() ;;
+  esac
+  if [ -z "$launch" ]; then
+    case "$provider" in cc) launch=claude ;; codex) launch=codex ;; agy) launch=agy ;; cursor) launch=cursor-agent ;; esac
+  fi
   for kv in "${CTA[@]+"${CTA[@]}"}"; do [ "$kv" = -e ] || envv+=("$kv"); done
   hd_up
   tab="${BK_WS_NAME:-${HD_TAB:-$tab}}"
@@ -155,11 +163,11 @@ hd_chat() {
           env BK_BACKEND=herdr "BK_PROJECT=$top" "${envv[@]+"${envv[@]}"}" bash -c "$WS_CHAT_CMD") || exit 1
   else
     t=$(hd_open_tab "$space" "$tab" "$dir" \
-          env BK_BACKEND=herdr "BK_PROJECT=$top" "${envv[@]+"${envv[@]}"}" claude) || exit 1
+          env BK_BACKEND=herdr "BK_PROJECT=$top" "${envv[@]+"${envv[@]}"}" "$launch") || exit 1
   fi
   HD_NEW_TERM="$t"
-  local lab=(bk.kind=chat "bk.win=$ws" "bk.project=$(project_of "$top")" "bk.provider=${BK_CHAT_PROVIDER:-cc}") cta
-  if [ "${BK_CHAT_PROVIDER:-cc}" = cc ]; then cta=$(account_of claude); [ -z "$cta" ] || lab+=("bk.account=$cta"); fi
+  local lab=(bk.kind=chat "bk.win=$ws" "bk.project=$(project_of "$top")" "bk.provider=$provider") cta
+  if [ -n "$account_provider" ]; then cta=$(account_of "$account_provider"); [ -z "$cta" ] || lab+=("bk.account=$cta"); fi
   [ -z "${BK_WS_NAME:-}" ] || lab+=("bk.name=$BK_WS_NAME")
   lab+=("${HD_LABELS[@]+"${HD_LABELS[@]}"}")
   hd_hc label "$t" "${lab[@]}" >/dev/null 2>&1 || info "(no pude etiquetar el chat $ws: bk ls no lo va a mostrar)"
@@ -307,16 +315,22 @@ hd_chat_cmd() {
 # bk chat --desde <chat|sesión>: un chat nuevo del mismo proyecto que arranca con el resumen que dejó otro
 # (lib/handoff.py). El resumen va como argumento de claude y el chat nuevo lo borra al tomarlo.
 hd_chat_from() {
-  local q="$1" row sid dir acct old top name ws
+  local q="$1" row sid dir acct old top name ws provider
   row=$(python3 "$WS/lib/handoff.py" find "$q") \
     || die "no hay un resumen listo de «${q}» (bk handoff $q lo pide; los listos: bk handoff --listos)"
-  IFS=$'\t' read -r sid dir acct old <<<"$row"
+  IFS=$'\t' read -r sid dir acct old provider <<<"$row"
+  provider="${provider:-claude}"
   [ -d "$dir" ] || die "la carpeta del resumen ya no existe: $dir"
   top=$(project_top "$dir"); name=$(project_of "$top")
   [ -z "${BK_ACCOUNT:-}" ] || acct="$BK_ACCOUNT"   # bk --account X chat --desde abra: manda la que pediste
   BK_ACCOUNT="$acct"
   # con exec, claude queda al frente de la terminal: Herdr lo ve como agente y no como el bash de -c
-  WS_CHAT_CMD="p=\$(python3 $(sq "$WS/lib/handoff.py") take $(sq "$sid")) && exec claude -- \"\$p\" || exec claude"
+  HD_PROVIDER="$provider"
+  if [ "$provider" = codex ]; then
+    WS_CHAT_CMD="p=\$(python3 $(sq "$WS/lib/handoff.py") take $(sq "$sid")) && exec codex \"\$p\" || exec codex"
+  else
+    WS_CHAT_CMD="p=\$(python3 $(sq "$WS/lib/handoff.py") take $(sq "$sid")) && exec claude -- \"\$p\" || exec claude"
+  fi
   if [ "$DRY" -eq 1 ]; then printf '%s\t%s\t%s\t%s\n' "$name" "$dir" "$acct" "$WS_CHAT_CMD"; return; fi
   # Sigue siendo el mismo trabajo: el chat nuevo nace con el nombre del viejo y en qué quedó, y queda unido a él
   # (bk.from) para que la barra de agentes lo muestre en su lugar. El resumen se lee ahora: el chat nuevo lo

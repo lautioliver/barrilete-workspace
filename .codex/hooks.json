@@ -17,6 +17,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+          },
+          {
+            "type": "command",
             "command": "[ -n \"${BK_TASK_DIR:-}\" ] || exit 0; f=\"${CLAUDE_PROJECT_DIR:-.}/scripts/agents/task_events.py\"; [ -f \"$f\" ] || f=\"$(git rev-parse --show-toplevel 2>/dev/null)/scripts/agents/task_events.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\""
           }
         ]
@@ -27,7 +31,61 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+          },
+          {
+            "type": "command",
             "command": "[ -n \"${BK_TASK_DIR:-}\" ] || exit 0; f=\"${CLAUDE_PROJECT_DIR:-.}/scripts/agents/task_events.py\"; [ -f \"$f\" ] || f=\"$(git rev-parse --show-toplevel 2>/dev/null)/scripts/agents/task_events.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+          }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
           }
         ]
       }
@@ -35,6 +93,10 @@
     "Stop": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+          },
           {
             "type": "command",
             "command": "[ -n \"${BK_TASK_DIR:-}\" ] || exit 0; f=\"${CLAUDE_PROJECT_DIR:-.}/scripts/agents/task_events.py\"; [ -f \"$f\" ] || f=\"$(git rev-parse --show-toplevel 2>/dev/null)/scripts/agents/task_events.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\""

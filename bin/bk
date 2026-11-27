@@ -995,12 +995,16 @@ workspace() {
     # El chat sobrevive a un /exit: vuelve a una shell en la misma carpeta
     # La cuenta de donde se abre (bk account use, o BK_ACCOUNT=x bk) pasa a la sesión nueva; new-session -e
     # también la deja en el entorno de la sesión, como bk account use
-    local CTA cx
-    if [ "${BK_CHAT_PROVIDER:-cc}" = cc ]; then account_args claude; else CTA=(); fi
-    cx=$(account_of codex)
+    local CTA cx chat_provider="${WS_CHAT_PROVIDER:-${BK_CHAT_PROVIDER:-cc}}" account_provider
+    [ "$chat_provider" = claude ] && chat_provider=cc
+    case "$chat_provider" in
+      cc) account_provider=claude; account_args claude ;;
+      codex) account_provider=codex; account_args codex ;;
+      *) account_provider=""; CTA=() ;;
+    esac
     chat=$(tmux new-session -d -P -F '#{pane_id}' -s "$WS_SESSION" -n main -c "$dir" -x "$cols" -y "$lines" \
            -e "BK_PROJECT=$top" "${CTA[@]+"${CTA[@]}"}" "${WS_CHAT_CMD:-claude}; exec \$SHELL")
-    [ ${#CTA[@]} -eq 0 ] || tmux set-option -t "$WS_SESSION" @bk_account_claude "$(account_of claude)"
+    [ -z "$account_provider" ] || [ -z "$(account_of "$account_provider")" ] || tmux set-option -t "$WS_SESSION" "@bk_account_$account_provider" "$(account_of "$account_provider")"
     [ -z "$cx" ] || { BK_FROM="$WS_SESSION" account_use "$cx" >/dev/null; }
     tmux set-environment -t "$WS_SESSION" BK_PROJECT "$top"
     [ -z "${BK_WS_NAME:-}" ] || tmux set-option -t "$WS_SESSION" @bk_name "$BK_WS_NAME"
@@ -1151,17 +1155,23 @@ ws_session() {
 # mensaje: lo pasa como argumento de claude (no con send-keys, que corta o rompe acentos y backticks) y el chat
 # nuevo lo borra al tomarlo. Después pregunta si cierra el workspace viejo; sin terminal, no lo cierra.
 chat_from() {
-  local q="$1" row sid dir acct old
+  local q="$1" row sid dir acct old provider
   [ -n "$q" ] || die "bk chat --desde <número de workspace|sesión>   (los resumenes listos: bk handoff --listos)"
   row=$(python3 "$WS/lib/handoff.py" find "$q") \
     || die "no hay un resumen listo de «${q}» (bk handoff $q lo pide; los listos: bk handoff --listos)"
-  IFS=$'\t' read -r sid dir acct old <<<"$row"
+  IFS=$'\t' read -r sid dir acct old provider <<<"$row"
+  provider="${provider:-claude}"
   [ -d "$dir" ] || die "la carpeta del resumen ya no existe: $dir"
   local top base k=2; top=$(project_top "$dir"); base="bk-$(project_of "$top")"
   while tmux has-session -t "=$base-$k" 2>/dev/null; do k=$((k + 1)); done
   [ -z "${BK_ACCOUNT:-}" ] || acct="$BK_ACCOUNT"   # bk --account X chat --desde 5: manda la que pediste
-  WS_SESSION="$base-$k" WS_NOSWITCH=1 BK_ACCOUNT="$acct"
-  WS_CHAT_CMD="p=\$(python3 $(sq "$WS/lib/handoff.py") take $(sq "$sid")) && claude -- \"\$p\" || claude"
+  local chat_provider="$provider"; [ "$chat_provider" = claude ] && chat_provider=cc
+  WS_SESSION="$base-$k" WS_NOSWITCH=1 BK_ACCOUNT="$acct" WS_CHAT_PROVIDER="$chat_provider"
+  if [ "$provider" = codex ]; then
+    WS_CHAT_CMD="p=\$(python3 $(sq "$WS/lib/handoff.py") take $(sq "$sid")) && codex \"\$p\" || codex"
+  else
+    WS_CHAT_CMD="p=\$(python3 $(sq "$WS/lib/handoff.py") take $(sq "$sid")) && claude -- \"\$p\" || claude"
+  fi
   [ -n "$DRY" ] && [ "$DRY" != 0 ] && { printf '%s\t%s\t%s\t%s\n' "$WS_SESSION" "$dir" "$acct" "$WS_CHAT_CMD"; return; }
   workspace "$dir"
   local new="$WS_SESSION" ans="" busy=""

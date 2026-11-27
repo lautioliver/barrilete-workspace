@@ -54,6 +54,14 @@ def origin(sid, pane=None, cwd=None):
     """De dónde viene: lo que bk sabe de la sesión (tmux, git, cuenta), sin preguntarle al agente."""
     pane = pane or os.environ.get("TMUX_PANE", "") or os.environ.get("HC_TERMINAL_ID", "")
     session = ws = name = account = ""
+    state_dir = os.environ.get("BK_AGENT_STATE_DIR", os.path.expanduser("~/.cache/sketchybar/agents"))
+    try:
+        with open(os.path.join(state_dir, os.path.basename(sid) + ".json")) as f:
+            agent = json.load(f)
+    except (OSError, ValueError):
+        agent = {}
+    provider = agent.get("provider") or "claude"
+    account = agent.get("account", "")
     if pane.startswith("%"):
         session = sh("tmux", "display-message", "-p", "-t", pane, "#{session_name}")
         # La carpeta del chat (donde arrancó claude), no la del Bash del agente, que puede haber hecho cd
@@ -61,7 +69,7 @@ def origin(sid, pane=None, cwd=None):
         if session.startswith("bk"):
             ws = sh("tmux", "show-options", "-qv", "-t", f"={session}:", "@bk_id")
             name = sh("tmux", "show-options", "-qv", "-t", f"={session}:", "@bk_name")
-            account = sh("tmux", "show-options", "-qv", "-t", f"={session}:", "@bk_account_claude")
+        account = account or sh("tmux", "show-options", "-qv", "-t", f"={session}:", f"@bk_account_{provider}")
     elif pane:
         # Herdr (bk backend herdr): el pane es la dirección de la terminal (t7) y el chat se conoce por sus
         # etiquetas: bk.win es su nombre (lo que toma bk chat --desde) y no hay número de workspace
@@ -75,11 +83,11 @@ def origin(sid, pane=None, cwd=None):
         # otro proyecto y después se hizo cd, la de la shell es la del otro
         cwd = cwd or (g.get("foreground") or {}).get("cwd") or g.get("cwd") or ""
     cwd = cwd or os.getcwd()
-    account = account or os.environ.get("BK_ACCOUNT_CLAUDE", "") or "default"
+    account = account or os.environ.get(f"BK_ACCOUNT_{provider.upper()}", "") or "default"
     top = sh("git", "-C", cwd, "rev-parse", "--show-toplevel") or cwd
     branch = sh("git", "-C", cwd, "branch", "--show-current")
     return {"sid": sid, "session": session, "ws": ws, "name": name, "cwd": top, "branch": branch,
-            "account": account, "ts": int(time.time())}
+            "account": account, "provider": provider, "ts": int(time.time())}
 
 
 def origin_line(o):
@@ -271,7 +279,8 @@ def main(argv):
         m = find(argv[1])
         if not m:
             sys.exit(1)
-        print("\t".join([m["sid"], m.get("cwd") or "", m.get("account") or "default", m.get("session") or ""]))
+        print("\t".join([m["sid"], m.get("cwd") or "", m.get("account") or "default", m.get("session") or "",
+                          m.get("provider") or "claude"]))
     elif cmd == "take" and len(argv) > 1:
         text = take(argv[1])
         if text is None:

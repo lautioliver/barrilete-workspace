@@ -67,12 +67,13 @@ siguen todos en la sesión `agents`. `bk open` sin argumento lista los workspace
   (sesión, workspace y número, rama, cuenta: lo completa bk, no el agente), hecho, falta (empezando por el primer paso),
   te espera a vos, no tocar y archivos y comandos; como mucho 40 líneas. Queda en
   `~/.local/state/bk/handoffs/<session_id>.md`. Lo pide el aviso rojo, o vos: `bk handoff [N]` se lo pide al chat del
-  workspace N (desde el mismo chat, `! bk handoff` imprime el pedido). `bk chat --desde N` (o «↪ Seguir desde ws N» en
+  workspace N (desde Claude, `! bk handoff` imprime el pedido; desde Codex, corré `bk handoff` en su terminal). `bk chat --desde N` (o «↪ Seguir desde ws N» en
   `alt+n`) abre un workspace más en la misma carpeta y con la misma cuenta, con el resumen como primer mensaje (va como
-  argumento de `claude`, sin `send-keys`), lo borra y te pregunta si cierra el viejo. `bk handoff --listos`: los que hay. Los tres están también en la paleta (`alt+k`). Mientras espera, la tira
+  argumento del proveedor de origen, sin `send-keys`), lo borra y te pregunta si cierra el viejo. Codex registra su sesión con `hooks/codex_handoff.py` y, al terminar el turno que guardó el resumen, bk abre el chat nuevo con Codex. `bk handoff --listos`: los que hay. Los tres están también en la paleta (`alt+k`). Mientras espera, la tira
   marca ese workspace con `↪` (en lugar del `▪` de contexto) y `bk s` marca su fila con `↪`, también en recientes.
-  **El chat nuevo se abre solo**: cuando el agente guarda el resumen, el hook (`lib/context_hook.py`, en el Write de
-  ese archivo) corre `bk handoff --listo <sesión>`. Si lo pediste vos con `bk handoff`, bk abre el chat nuevo en el
+  **El chat nuevo se abre solo**: cuando Claude guarda el resumen, su hook (`lib/context_hook.py`, en el Write de
+  ese archivo) corre `bk handoff --listo <sesión>`; Codex hace lo mismo al terminar el turno que lo guardó (`Stop`,
+  `hooks/codex_handoff.py`). Si lo pediste vos con `bk handoff`, bk abre el chat nuevo en el
   momento (`bk chat --desde`); si lo pidió el aviso rojo, no abre nada solo: con Herdr sale un aviso «Resumen listo»
   que lo abre al hacerle clic (`bk handoff --seguir`, el resumen listo más nuevo; dura diez minutos), y con tmux queda
   la marca `↪` como siempre. Una sola vez por pedido, aunque el agente guarde el archivo de nuevo; con tmux, fuera de
