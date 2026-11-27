@@ -4,7 +4,7 @@
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(dirname "$HERE")"
 TMP=$(cd "$(mktemp -d)" && pwd -P); trap 'rm -rf "$TMP"' EXIT
-unset TMUX TMUX_PANE BK_ACCOUNT BK_ACCOUNT_CLAUDE
+unset TMUX TMUX_PANE BK_BACKEND BK_ACCOUNT BK_ACCOUNT_CLAUDE
 export HOME="$TMP/home"; mkdir -p "$HOME"
 mkdir -p "$TMP/fake"; printf '#!/bin/sh\necho "$*" >> "%s/tmux.log"\nexit 1\n' "$TMP" >"$TMP/fake/tmux"; chmod +x "$TMP/fake/tmux"
 N=0; FAILED=0
