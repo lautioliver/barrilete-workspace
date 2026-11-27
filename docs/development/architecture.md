@@ -8,12 +8,12 @@
 - **Backend** (`BK_BACKEND`, o `~/.config/bk/backend`): `tmux` por defecto; `herdr` carga las funciones de `lib/herdr.sh`, que usan `herdr-app` (espacios y pestañas) y `hc` (leer, escribir y cerrar terminales). Lo que en tmux es el nombre de la ventana y sus `@opciones`, en Herdr son etiquetas de la terminal (`bk.kind`, `bk.win`, `bk.project`, `bk.role`, `bk.ref`, `bk.id`).
 - **`lib/*.py`** (Python, biblioteca estándar): cada comando con lógica o pantalla tiene su módulo (ver [módulos](../reference/modules.md)). Las pantallas de terminal son `curses`.
 - **`herdr/`**: mods en JavaScript (paneles del hub, acciones sin panel, piezas del layout), `keys.json`, el layout `bk-lavanda` y los temas. `lib/herdr_install.py` los copia a `~/.config/herdr-app`. Un mod solo puede correr programas y leer su salida: pide los datos a `bk _hub <tema>` (JSON) y lanza con `bk _do`.
-- **Hooks**: `hooks/agent_state.sh` (estado de cada sesión de Claude Code), `lib/context_hook.py` (aviso de contexto alto), `lib/tmux_guard.py` (frena `tmux kill-server` sobre el servidor real) y los del kit (`scripts/agents/guardrails.py`, `task_events.py`). `githooks/reference-transaction` rechaza cualquier cambio de `main` que no venga de `bk land`.
+- **Hooks**: `hooks/agent_state.sh` (estado de cada sesión de Claude Code), `scripts/agents/cursor_state.py` (estado de Cursor Agent), `lib/context_hook.py` (aviso de contexto alto), `lib/tmux_guard.py` (frena `tmux kill-server` sobre el servidor real) y los del kit (`scripts/agents/guardrails.py`, `task_events.py`). `githooks/reference-transaction` rechaza cualquier cambio de `main` que no venga de `bk land`.
 
 ## Cómo fluye el estado
 
-1. Claude Code dispara `hooks/agent_state.sh` en cada evento (inicio, prompt, herramienta, permiso, fin…).
-2. El hook escribe `~/.cache/sketchybar/agents/<sesión>.json`: estado, rol, modelo, issue y pane (en Herdr, la terminal de `HC_TERMINAL_ID`).
+1. Claude Code y Cursor Agent disparan sus hooks de ciclo de vida.
+2. `hooks/agent_state.sh` y `scripts/agents/cursor_state.py` escriben en `~/.cache/sketchybar/agents/<sesión>.json`: estado, rol, modelo, issue y pane (en Herdr, la terminal de `HC_TERMINAL_ID`).
 3. `lib/agents.py` lee esos archivos y los cruza con las ventanas de tmux o las terminales de Herdr; de ahí leen `bk ls`, la tira, el riel, `bk monitor`, `bk s` y `bk _hub`.
 4. Los glifos y colores de cada estado salen de `gentle.STATES` (`lib/gentle.py`).
 

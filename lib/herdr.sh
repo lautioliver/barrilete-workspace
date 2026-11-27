@@ -412,22 +412,35 @@ hd_id_give() {
   printf '%s' "$n"
 }
 
-# hd_adopt <terminal>: que bk conozca esa terminal. Un agente abierto desde Herdr (el + de las pestañas: un
-# claude o un codex sin etiquetas de bk) pasa a ser un chat de su proyecto (<proyecto>, <proyecto>-2…), así
+# hd_adopt <terminal>: que bk conozca esa terminal. Un agente abierto desde Herdr (el + de las pestañas: Claude,
+# Codex o Cursor Agent sin etiquetas de bk) pasa a ser un agente; las shells pasan a ser chats, así
 # bk ls, bk say, bk go y bk handoff andan con él igual que con los que abre bk chat. Y le da su número.
 # Imprime el número. No toca lo que no es un agente con pestaña (una shell, un popup, un subagente).
 # Vale también para el agente de otra máquina de Herdr (omarchy/t28): las etiquetas y los números se reparten
 # acá, así no se repiten entre máquinas.
 hd_adopt() {
-  local t="$1" j kind dir top name ws
+  local t="$1" j kind dir top name ws app argv
   j=$(hd_hc get "$t" --json 2>/dev/null) || return 1
   [ "$(jq -r '.state // ""' <<<"$j" 2>/dev/null)" = live ] || return 0
   kind=$(jq -r '.labels["bk.kind"] // ""' <<<"$j" 2>/dev/null)
   case "$kind" in
-    chat|agent) ;;
+    agent) ;;
+    chat)
+      argv=$(jq -r '[.foreground.argv[]?] | join(" ")' <<<"$j")
+      case "$argv" in
+        *cursor-agent/versions/*|*cursor-agent\ --*)
+          dir=$(jq -r '.foreground.cwd // .cwd // ""' <<<"$j"); top=$(project_top "$dir"); name=$(project_of "$top")
+          ws="cursor-$(hd_label "$t" bk.id)"
+          hd_hc label "$t" bk.kind=agent "bk.win=$ws" "bk.project=$name" bk.role=cursor bk.adopted=1 >/dev/null 2>&1 || return 1 ;;
+      esac ;;
     "")
       [ -n "$(jq -r '.labels["herdr.tab"] // ""' <<<"$j")" ] || return 0
-      [ -n "$(jq -r '.status.app // ""' <<<"$j")" ] || return 0
+      app=$(jq -r '.status.app // ""' <<<"$j")
+      argv=$(jq -r '[.foreground.argv[]?] | join(" ")' <<<"$j")
+      case "$app $argv" in
+        *cursor-agent/versions/*|*cursor-agent\ --*) app=cursor-agent ;;
+      esac
+      [ -n "$app" ] || return 0
       dir=$(jq -r '.foreground.cwd // .cwd // ""' <<<"$j")   # la de claude, no la de la shell (pudo hacer cd)
       case "$t" in
         */*)   # de otra máquina (<máquina>/<t>): la carpeta es de allá, así que el proyecto se le pregunta a
@@ -439,8 +452,13 @@ hd_adopt() {
           [ -d "$dir" ] || return 0
           top=$(project_top "$dir"); name=$(project_of "$top") ;;
       esac
-      ws="$name"; [ -z "$(hd_chat_term "$name")" ] || ws=$(hd_free "$name")
-      hd_hc label "$t" bk.kind=chat "bk.win=$ws" "bk.project=$name" bk.adopted=1 >/dev/null 2>&1 || return 1 ;;
+      if [ "$app" = cursor-agent ]; then
+        ws="cursor-$(hd_id_give "$t")"
+        hd_hc label "$t" bk.kind=agent "bk.win=$ws" "bk.project=$name" bk.role=cursor bk.adopted=1 >/dev/null 2>&1 || return 1
+      else
+        ws="$name"; [ -z "$(hd_chat_term "$name")" ] || ws=$(hd_free "$name")
+        hd_hc label "$t" bk.kind=chat "bk.win=$ws" "bk.project=$name" bk.adopted=1 >/dev/null 2>&1 || return 1
+      fi ;;
     *) return 0 ;;
   esac
   hd_id_give "$t"

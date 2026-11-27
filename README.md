@@ -1,7 +1,7 @@
 # barrilete-workspace
 
 Workspace personal de agentes sobre [Barrilete Kit](https://github.com/lautioliver/barrilete-kit), manejado desde la terminal.
-Los agentes corren en la sesión tmux `agents`; `bk ls`, la tira y `bk monitor` muestran su estado (rol, modelo, issue) y `bk checkpoints`, lo que te espera.
+Los agentes corren en tmux o Herdr; `bk ls`, la tira y `bk monitor` muestran su estado (rol, modelo, issue) y `bk checkpoints`, lo que te espera. Cursor Agent abierto en una terminal de Herdr también se adopta como ventana de agente.
 
 ```
 bk                 (workspace)      bk s             (sesiones)
@@ -126,7 +126,7 @@ pisan con los del repo (se editan acá).
   `bk stop` y `bk watch` leen el número igual: `bk stop 7` cierra el agente de la ventana 7, no el del issue 7
   (ese es `bk stop i7`).
 - **Adopción**: un agente abierto desde Herdr (el `+` de las pestañas: no tiene etiquetas de bk) pasa a ser un
-  chat de su proyecto. Toma el nombre `<proyecto>` (o `<proyecto>-2`… si ya es de otro chat) y su número, y desde
+  chat de su proyecto. Cursor Agent pasa a ser agente y recibe estado por los hooks del proyecto. Toma el nombre `<proyecto>` (o `<proyecto>-2`… si ya es de otro chat) y su número, y desde
   ahí `bk ls`, `say`, `go` y `handoff` andan con él como con los de `bk chat`. Solo se adopta una terminal viva,
   con pestaña y que informa estado de agente: una shell no se toca. Lo hace la barra de estado de `bk-lavanda`
   cada 1,5 s, una vez por terminal (`bk _adopt <terminal>`), y también `bk handoff --term`.
