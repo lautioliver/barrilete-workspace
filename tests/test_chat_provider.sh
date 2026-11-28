@@ -87,4 +87,14 @@ printf '%s\n' "$envs" | grep -qx "CLAUDE_CONFIG_DIR=$ACC/trabajo"
 tap_check $? "bk chat --suelto sin proveedor pasa la cuenta de claude" "$(printf '%s' "$envs" | tr '\n' ' ')"
 unset BK_ACCOUNT_CODEX BK_ACCOUNT_CLAUDE
 
+# --- un nombre que no está en la lista no abre claude en su lugar: falla y lo dice ---
+: >"$LOG"
+export BK_CHAT_PROVIDER=gpt
+tap_run out 1 "$ROOT/bin/bk" chat --suelto
+[[ "$out" == *"BK_CHAT_PROVIDER=gpt no es un proveedor del chat"* ]]
+tap_check $? "BK_CHAT_PROVIDER desconocido falla y lo dice" "$out"
+n=$(awk -F'\t' '$1 == "new-session" || $1 == "new-window" { c++ } END { print c + 0 }' <"$LOG")
+[ "$n" = 0 ]
+tap_check $? "BK_CHAT_PROVIDER desconocido no abre ningún chat" "abrió $n"
+
 tap_done
