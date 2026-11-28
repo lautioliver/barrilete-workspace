@@ -132,4 +132,10 @@ do_ agente --cwd "$TMP" -- run 42
 do_ agente --cwd "$TMP" -- approve t1 --dry-run
 [ "$out" = dry ]; tap_check $? "bk _do --dry-run de un agente no corre nada y no se niega" "got: $out"
 
+# Pasado el tope de anidado, human_only lo trata como de una persona y dice por qué sin repetir "bk": el aviso es
+# "bk <lo que devuelve>: …" (antes salía "bk bk: …").
+tap_run out 0 python3 -c 'import os, sys; sys.path.insert(0, os.environ["HC_LIB"]); import human_cli as hc
+print(hc.human_only(["_do", "--"] * 70 + ["run", "1"]))'
+[ "$out" = "_do anidado" ]; tap_check $? "human_only da un nombre propio al pasar el tope de anidado" "got: $out"
+
 tap_done
