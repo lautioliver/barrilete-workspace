@@ -113,7 +113,7 @@ def human_only(args):
         if words[:2] in (["supervisor", "approve"], ["supervisor", "cancel"]):
             return " ".join(words[:2])
         return None
-    return "bk"              # nested beyond reason: treat it as human-only
+    return "_do anidado"     # nested beyond reason: treat it as human-only (the notice reads "bk _do anidado: …")
 
 
 def main(argv):
