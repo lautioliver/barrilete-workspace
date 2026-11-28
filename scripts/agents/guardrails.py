@@ -125,7 +125,7 @@ def comandos(texto):
         tokens = re.findall(r"[;&|()]+|[^\s;&|()'\"]+", texto)
     actual = []
     for tok in tokens:
-        if set(tok) <= set(";&|()"):
+        if tok and set(tok) <= set(";&|()"):   # '' is an empty word, not a separator
             if actual:
                 yield actual
             actual = []
@@ -267,20 +267,37 @@ def metodo_api(args):
 
 
 def analizar_bk(args):
-    """bk say/approve and supervisor approval are human-only."""
+    """bk say/approve and supervisor approval are human-only, also inside bk _do and bk _do_run (#45)."""
     if "--dry-run" in args:
         return None
-    i = 0
-    while i < len(args) and args[i].startswith("-"):
-        if args[i] == "--account":
-            i += 2
-        else:
-            i += 1
-    if i < len(args) and args[i] in ("say", "approve"):
-        return f"human-only BK command (bk {args[i]}); run it from a separate human terminal"
-    if i + 1 < len(args) and args[i:i + 2] == ["supervisor", "approve"]:
+    for _ in range(64):
+        i = 0
+        while i < len(args) and args[i].startswith("-"):
+            if args[i] == "--account":
+                i += 2
+            else:
+                i += 1
+        args = args[i:]
+        # bk _do [--cwd D] [--title T] -- <cmd> and bk _do_run <log> <title> [--] <cmd> run another bk.
+        if args[:1] == ["_do"]:
+            j = 1
+            while j < len(args) and args[j] != "--":
+                j += 2
+            args = args[j + 1:]
+            continue
+        if args[:1] == ["_do_run"]:
+            args = args[3:]
+            if args[:1] == ["--"]:
+                args = args[1:]
+            continue
+        break
+    else:
+        return "human-only BK command check: bk _do nested too deep to verify; run it from a separate human terminal"
+    if args[:1] in (["say"], ["approve"]):
+        return f"human-only BK command (bk {args[0]}); run it from a separate human terminal"
+    if args[:2] == ["supervisor", "approve"]:
         return "human-only BK command (bk supervisor approve); run it from a separate human terminal"
-    if i + 1 < len(args) and args[i:i + 2] == ["supervisor", "cancel"]:
+    if args[:2] == ["supervisor", "cancel"]:
         return "human-only BK command (bk supervisor cancel); run it from a separate human terminal"
     return None
 

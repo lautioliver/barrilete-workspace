@@ -177,6 +177,15 @@ class BkDeUnaPersona(unittest.TestCase):
                   "bk _do_run /tmp/l t -- _do --cwd /tmp -- supervisor approve x"):
             self.assertIsNotNone(frena(c), c)
 
+    def test_un_argumento_vacio_no_corta_el_comando(self):
+        from guardrails import comandos
+        self.assertEqual(list(comandos("bk _do_run /l '' approve t1")), [["bk", "_do_run", "/l", "", "approve", "t1"]])
+        self.assertIsNotNone(frena("bk _do_run /l \"\" -- say 3 si"))
+
+    def test_anidado_muy_hondo_frena(self):
+        self.assertIsNotNone(frena("bk " + "_do -- " * 2000 + "say 3 si"))
+        self.assertIsNotNone(frena("bk " + "_do -- " * 2000 + "run 1"))
+
     def test_lo_demas_de_do_pasa(self):
         for c in ("bk _do -- run 42", "bk _do --cwd /tmp --title 'Chat nuevo' -- chat",
                   "bk _do --title approve -- open /tmp", "bk _do --cwd say -- run 1", "bk _hub issues",
