@@ -442,8 +442,9 @@ espera 10 grep -q 'mod.open' "$HD_FAKE/log"   # abrir el mod es lo último que h
 check_eq "$(grep -c 'mod.open {"name": "bk-aviso"}' "$HD_FAKE/log") $(ls "$AV" | grep -vc '\.json$') $(jq -c '[.title, .level]' "$HOME/.cache/bk/herdr-aviso.json")" '1 0 ["Roles","success"]' "_do: abre bk-aviso, no deja temporales en la cola y el archivo viejo queda con el último aviso"
 rm -rf "$AV"; out=$(bk _do --cwd "$WT" --title Carpeta -- _hub status); espera 15 hay 1
 check_eq "$(jq -r .branch "$(jq -r .log <<<"$out")")" "w7" "_do --cwd: el comando corre en esa carpeta"
-rm -rf "$AV"; bk _do --cwd "$REPO" -- approve nada >/dev/null; espera 15 hay 1
-check_eq "$(ultimo | jq -c '[.title, .level, .body]')" "[\"bk approve nada\",\"error\",\"bk: no hay una tarea pendiente 'nada' (bk tasks)\"]" "_do que falla: aviso error con la última línea; sin --title, el comando"
+# El comando que falla no es de una persona (approve, say): un agente que corre este test no lo puede lanzar (#45).
+rm -rf "$AV"; bk _do --cwd "$REPO" -- _do >/dev/null; espera 15 hay 1
+check_eq "$(ultimo | jq -c '[.title, .level, .body]')" "[\"bk _do\",\"error\",\"bk: uso: bk _do [--cwd DIR] [--title T] -- <args de bk…>\"]" "_do que falla: aviso error con la última línea; sin --title, el comando"
 rm -rf "$AV"; out=$(bk _do --title Sonido -- sound off); espera 15 hay 1
 check_eq "$(ultimo | jq -c '[.level, .body]') $(grep -c "$(printf '\033')" "$(jq -r .log <<<"$out")")" '["success","sonidos apagados"] 1' "_do: el texto del aviso va sin los colores que sí están en el log"
 rm -rf "$AV"; bk _do -- roles >/dev/null; bk _do -- tasks >/dev/null; espera 15 hay 2
