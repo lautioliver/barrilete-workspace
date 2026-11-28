@@ -43,6 +43,8 @@ offset = int(os.environ.get("SV_OFFSET", "0"))
 real_now = sv.now
 sv.now = lambda: real_now() + timedelta(seconds=offset)
 sv.require_terminal = lambda action: None
+if not os.environ.get("SV_REAL_HUMAN"):    # el control del árbol de procesos se prueba aparte (SV_REAL_HUMAN=1)
+    sv.require_human = lambda action: None
 if os.environ.get("SV_SLOW"):        # agranda la ventana entre leer y escribir el estado
     import time
     real_write = sv.write_state
@@ -259,6 +261,17 @@ OUT=$(python3 "$ROOT/lib/supervisor.py" status)
 check_has "$OUT" '"verified_harnesses": []' "status: sin adaptadores reales registrados"
 check_has "$OUT" '"stale_after_seconds": 300' "status muestra el umbral de stale"
 check_has "$(python3 "$ROOT/lib/supervisor.py" reconcile --dry-run)" '"dry_run": true' "el CLI expone reconcile --dry-run"
+# approve y cancel controlan ellos mismos que no los llame un agente (no solo bin/bk): entrar directo al módulo,
+# con una terminal (un pty se consigue en una línea), desde una tarea bk (BK_TASK_DIR), se niega y no cambia nada.
+sv propose gate implementer:issue:91:normal >/dev/null
+OUT=$(SV_REAL_HUMAN=1 BK_TASK_DIR="$TMP" sv approve gate)
+check_has "$OUT" "error: " "supervisor.approve desde una tarea se niega aunque haya terminal"
+check_eq "$(sv plan gate)" pending "supervisor.approve negado no reserva el plan"
+OUT=$(SV_REAL_HUMAN=1 BK_TASK_DIR="$TMP" sv cancel gate)
+check_has "$OUT" "error: " "supervisor.cancel desde una tarea se niega aunque haya terminal"
+check_eq "$(sv plan gate)" pending "supervisor.cancel negado no cancela el plan"
+check_eq "$(sv cancel gate)" cancelled "setup: se limpia el plan del control"
+
 # bk supervisor sin subcomando: el uso del supervisor, no un "unbound variable" de bin/bk (set -u).
 bkr() { HOME="$TMP/home" "$ROOT/bin/bk" "$@"; }
 mkdir -p "$TMP/home"
