@@ -504,9 +504,23 @@ def require_terminal(action):
         fail(f"bk supervisor {action} requiere una terminal humana interactiva")
 
 
+def require_human(action):
+    """The process-tree gate of human_cli, here too: entering the module directly (python3 supervisor.py
+    approve, under a pty) must not skip it. A terminal alone is not proof of a person."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import human_cli
+    try:
+        blocked = human_cli.reason()
+    except (OSError, subprocess.SubprocessError):
+        blocked = "the caller process tree could not be verified"
+    if blocked:
+        fail(f"bk supervisor {action}: {blocked}; ejecutalo desde una terminal humana separada")
+
+
 def approve(run_id):
     identifier(run_id, "run_id")
     require_terminal("approve")
+    require_human("approve")
     with locked():
         initial = read_state()
         record = plan_record(initial, run_id)
@@ -550,6 +564,7 @@ def approve(run_id):
 def cancel(run_id):
     identifier(run_id, "run_id")
     require_terminal("cancel")
+    require_human("cancel")
     with locked():
         initial = read_state()
         snapshot = json.loads(json.dumps(plan_record(initial, run_id)))
