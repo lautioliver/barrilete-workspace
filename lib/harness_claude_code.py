@@ -98,7 +98,8 @@ class ClaudeCodeAdapter:
     def link_mark(self, run_id, lease_id):
         """(pid, process_start, session_id) of the mark to link to a reserved lease, or None.
 
-        Candidates: marks with this run_id and lease_id, without ended_at, whose process is alive.
+        Candidates: marks with this run_id and lease_id, without ended_at, whose process is alive. If
+        that process also has an ended mark of this lease (a /clear or resume before the link), None.
         In Claude Code a subagent fires SubagentStart, not SessionStart, so it leaves no mark (ADR-003,
         "Enlace del lease"). Marks of more than one process, or a tie for the oldest, are ambiguous:
         None, and the lease stays reserved."""
@@ -111,18 +112,24 @@ class ClaudeCodeAdapter:
             names = os.listdir(sessions_dir())
         except OSError:
             return None
-        candidates = []
+        candidates, ended = [], set()
         for name in names:
             if not (name.startswith(PREFIX) and name.endswith(".json")):
                 continue
             mark = read_mark(name[len(PREFIX):-len(".json")])
-            if (mark is None or mark["run_id"] != run_id or mark["lease_id"] != lease_id
-                    or mark["ended_at"] is not None):
+            if mark is None or mark["run_id"] != run_id or mark["lease_id"] != lease_id:
                 continue
             if sv.process_state(mark["pid"], mark["process_start"]) != "alive":
                 continue
+            if mark["ended_at"] is not None:
+                ended.add((mark["pid"], mark["process_start"]))
+                continue
             candidates.append(mark)
         if not candidates or len({(m["pid"], m["process_start"]) for m in candidates}) > 1:
+            return None
+        # A session of this lease that ended while its process lives on (/clear, resume): the session
+        # changed before the link, and ADR-003 keeps that unknown until verified. Not linked.
+        if (candidates[0]["pid"], candidates[0]["process_start"]) in ended:
             return None
         candidates.sort(key=lambda m: _instant(m["started_at"]))
         if len(candidates) > 1 and _instant(candidates[0]["started_at"]) == _instant(candidates[1]["started_at"]):
