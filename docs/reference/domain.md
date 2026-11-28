@@ -17,6 +17,7 @@ No hay base de datos: todo es archivos en la máquina de la persona.
 | Caché de PRs de checkpoints | `~/.cache/bk/checkpoints_prs.json` | `bk _prs` |
 | Caché del hub de Herdr | `~/.cache/bk/hub/` | `lib/herdr_hub.py` |
 | Épicas | `~/.cache/bk/epica.json`, `epica-subs.json` | `lib/herdr_epica.py` |
+| Feedback del ruteo (ADR-002) | `${XDG_STATE_HOME:-~/.local/state}/bk/routing/`: `events.jsonl` (180 días como máximo), `aggregates.json` (mensual, sin IDs), `.lock` | `lib/routing_feedback.py` |
 | Config de la persona | `~/.config/bk/` (`backend`, `context`, `profiles.yml`, `tareas.yml`, `models.yml`, `gh-app.json`) | los comandos de bk |
 
 ## IDs

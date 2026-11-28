@@ -22,6 +22,8 @@ Instrucciones para modelos: leer este archivo y AGENTS.md. Spec aspiracional = /
 - [Convención de nombres en GitHub](github-naming-convention.md) — labels en ../.github/labels.yml
 - [Decisiones (ADRs)](decisions/README.md)
 - [ADR-001: la lista de espacios compartida entre máquinas](decisions/ADR-001-lista-de-espacios-entre-maquinas.md)
+- [ADR-002: retroalimentación local del ruteo de agentes](decisions/ADR-002-retroalimentacion-del-ruteo-local.md)
+- [ADR-003: supervisión local, bus de coordinación y leases globales](decisions/ADR-003-supervision-local-y-leases.md)
 - [ADR-002: validación estructurada del test en rojo](decisions/kit/ADR-002-structured-red-validation.md)
 - [ADR-003: DDD mínimo, glosario y mapa de contextos](decisions/kit/ADR-003-minimal-ddd-glossary-and-contexts.md)
 - [ADR-004: modo de lanzamiento de `/orchestrate` por rol (bk o subagente)](decisions/kit/ADR-004-orchestrate-launch-mode-per-role.md)

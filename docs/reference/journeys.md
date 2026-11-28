@@ -10,7 +10,7 @@
 4. `lib/tasks.py create` crea la tarea `<n>-<rol>`; si ya hay una activa, no se lanza otro agente.
 5. bk suelta el candado del worktree, abre la ventana `i<n>` (tmux) o la pestaña (Herdr, `lib/herdr.sh`) y corre el agente con `BK_TASK_DIR`.
 6. `hooks/agent_state.sh` anota su estado; los hooks del kit, los eventos de la tarea.
-7. El agente abre el PR y cierra con `bk done pr <n>`: la tarea queda `completed` y se propone `pr<n>-reviewer`, que arranca con `bk approve`.
+7. El agente abre el PR y cierra con `bk done pr <n>`: la tarea queda `completed` y se propone `pr<n>-reviewer`, que la persona lanza con `bk approve` desde una terminal humana separada.
 
 ## Entrar a main (`bk land --wait`)
 

@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+# bk supervisor: reservas, cola y ciclo de leases con un adaptador de harness falso (ADR-003).
+# El estado va a un XDG_STATE_HOME temporal; los procesos de los leases son `sleep` propios del test.
+# No lanza agentes ni toca ~/.local/state real.
+set -u
+HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(dirname "$HERE")"
+TMP=$(mktemp -d)
+PIDS=()
+cleanup() { for p in "${PIDS[@]:-}"; do [ -n "$p" ] && kill "$p" 2>/dev/null; done; rm -rf "$TMP"; }
+trap cleanup EXIT
+N=0; FAILED=0
+check_eq() { N=$((N+1)); if [ "$1" = "$2" ]; then echo "ok $N - $3"; else echo "not ok $N - $3 (got '$1', want '$2')"; FAILED=$((FAILED+1)); fi; }
+check_has() { N=$((N+1)); case "$1" in *"$2"*) echo "ok $N - $3" ;; *) echo "not ok $N - $3 (got '$1', want '*$2*')"; FAILED=$((FAILED+1)) ;; esac; }
+
+export XDG_STATE_HOME="$TMP/state"
+export PYTHONPYCACHEPREFIX="$TMP/pycache"
+SESSIONS="$TMP/sessions"; mkdir -p "$SESSIONS"
+STORE="$XDG_STATE_HOME/bk/supervisor"
+
+# Driver: importa lib/supervisor.py con el estado temporal, registra el adaptador falso si SV_ADAPTER=1,
+# corre el reloj SV_OFFSET segundos y contesta las confirmaciones humanas (las prueba otra capa: human_cli).
+cat >"$TMP/sv.py" <<'PY'
+import builtins, json, os, sys, uuid
+from datetime import timedelta
+sys.path.insert(0, os.environ["SV_LIB"])
+import supervisor as sv
+
+SESS = os.environ["SV_SESSIONS"]
+
+class FakeAdapter:
+    def session_state(self, session_id):
+        try:
+            value = open(os.path.join(SESS, session_id)).read().strip()
+        except FileNotFoundError:
+            return "absent"
+        if value == "raise":
+            raise RuntimeError("adaptador roto")
+        return value
+
+if os.environ.get("SV_ADAPTER") == "1":
+    sv.HARNESS_ADAPTERS["claude-code"] = FakeAdapter()
+offset = int(os.environ.get("SV_OFFSET", "0"))
+real_now = sv.now
+sv.now = lambda: real_now() + timedelta(seconds=offset)
+sv.require_terminal = lambda action: None
+
+def rid(name): return str(uuid.uuid5(uuid.NAMESPACE_URL, "run/" + name))
+def lid(name, i): return str(uuid.uuid5(uuid.NAMESPACE_URL, f"lease/{name}/{i}"))
+def tid(name, i): return str(uuid.uuid5(uuid.NAMESPACE_URL, f"task/{name}/{i}"))
+
+cmd, args = sys.argv[1], sys.argv[2:]
+try:
+    if cmd == "propose":            # propose <run> role:kind:num:priority ...
+        name, specs = args[0], args[1:]
+        assignments = []
+        for i, spec in enumerate(specs):
+            role, kind, num, prio = spec.split(":")
+            assignments.append({"task_id": tid(name, i), "lease_id": lid(name, i), "resource_kind": kind,
+                                "resource_number": int(num), "task_type": "feature", "area": "cli",
+                                "priority": prio, "critical": False, "risk_flags": [], "provider": "claude",
+                                "model_id": "claude-sonnet-5-5", "harness": "claude-code", "role": role,
+                                "worktree": "/tmp/wt-" + name})
+        print(sv.propose({"schema": sv.PLAN_SCHEMA, "run_id": rid(name), "assignments": assignments})["status"])
+    elif cmd in ("approve", "cancel"):
+        word = "APROBAR" if cmd == "approve" else "CANCELAR"
+        builtins.input = lambda prompt: f"{word} {rid(args[0])}"
+        sys.stdout = open(os.devnull, "w")     # display_plan
+        result = getattr(sv, cmd)(rid(args[0]))
+        sys.stdout = sys.__stdout__
+        print(result["status"])
+    elif cmd == "pstart":
+        print(sv.process_start_time(int(args[0])))
+    elif cmd == "start":             # start <run> <i> <pid> <session> [process_start]
+        start = args[4] if len(args) > 4 else sv.process_start_time(int(args[2]))
+        print(sv.start_lease(rid(args[0]), lid(args[0], int(args[1])), int(args[2]), start, args[3])["status"])
+    elif cmd == "heartbeat":         # heartbeat <run> <i> <pid> <session>
+        start = sv.process_start_time(int(args[2])) or "gone"
+        print(sv.heartbeat_lease(rid(args[0]), lid(args[0], int(args[1])), int(args[2]), start, args[3])["status"])
+    elif cmd == "finish":
+        print(sv.finish_lease(rid(args[0]), lid(args[0], int(args[1])))["status"])
+    elif cmd == "reconcile":
+        r = sv.reconcile(dry_run=bool(args))
+        print(f"stale={len(r['stale'])} released={len(r['released'])} human={len(r['needs_human'])}")
+    elif cmd == "lease":
+        with sv.locked():
+            rec = sv.plan_record(sv.read_state(), rid(args[0]))
+        print(rec["leases"][lid(args[0], int(args[1]))]["status"])
+    elif cmd == "field":             # field <run> <i> <campo>
+        with sv.locked():
+            rec = sv.plan_record(sv.read_state(), rid(args[0]))
+        print(rec["leases"][lid(args[0], int(args[1]))][args[2]])
+    elif cmd == "plan":
+        with sv.locked():
+            print(sv.plan_record(sv.read_state(), rid(args[0]))["status"])
+    elif cmd == "slots":
+        print(sv.status()["reserved_implementers"])
+    elif cmd == "events":
+        kinds = [e["kind"] for e in sv.event_rows()]
+        print(kinds.count(args[0]))
+    elif cmd == "legacy":            # quita los leases de un plan reservado, como un estado viejo
+        state = json.load(open(sv.STATE))
+        for rec in state["plans"]:
+            if rec["plan"]["run_id"] == rid(args[0]):
+                del rec["leases"]
+        json.dump(state, open(sv.STATE, "w"))
+        print("ok")
+except ValueError as exc:
+    sys.stdout = sys.__stdout__
+    print("error: " + str(exc))
+PY
+sv()  { SV_LIB="$ROOT/lib" SV_SESSIONS="$SESSIONS" SV_ADAPTER="${ADAPTER:-1}" SV_OFFSET="${OFFSET:-0}" python3 "$TMP/sv.py" "$@"; }
+spawn() { sleep 600 & PIDS+=("$!"); LAST=$!; }
+session() { printf '%s\n' "$2" >"$SESSIONS/$1"; }
+
+# --- reserva y slots ---------------------------------------------------------------------------------
+check_eq "$(sv propose a implementer:issue:1:normal implementer:issue:2:normal reviewer:pr:9:normal)" pending "propose deja el plan pendiente"
+check_eq "$(sv approve a)" reserved "approve reserva el plan"
+check_eq "$(sv lease a 0)" reserved "cada asignación recibe un lease reserved"
+check_eq "$(sv slots)" 2 "los implementadores ocupan slot; el reviewer no"
+check_eq "$(sv propose b implementer:issue:3:normal implementer:issue:4:normal)" pending "otro plan se propone"
+check_eq "$(sv approve b)" queued "sin slots el plan queda en cola"
+check_eq "$(sv propose c implementer:issue:1:hotfix)" pending "un plan sobre un issue reservado se propone"
+check_has "$(sv approve c)" "ya está reservado" "no se aprueba un issue con lease activo"
+check_eq "$(sv propose d implementer:issue:5:hotfix)" pending "un hotfix se propone"
+check_eq "$(sv approve d)" reserved "un hotfix que entra en el slot libre se reserva"
+check_eq "$(sv slots)" 3 "tres implementadores es el máximo"
+
+# --- arranque: adaptador, proceso y sesión -----------------------------------------------------------
+spawn; P0=$LAST; spawn; P1=$LAST
+session s0 alive; session s1 alive
+check_has "$(ADAPTER=0 sv start a 0 "$P0" s0)" "no hay adaptador verificado" "sin adaptador el lease no arranca"
+check_eq "$(sv lease a 0)" reserved "sin adaptador sigue reserved"
+check_has "$(sv start a 0 "$P0" s0 'Thu Jan  1 00:00:00 1970')" "no pudo confirmar" "otra hora de inicio no es el mismo proceso"
+check_has "$(sv start a 0 "$P0" nadie)" "no pudo confirmar" "una sesión que el adaptador no ve no arranca"
+check_eq "$(sv start a 0 "$P0" s0)" running "con proceso y sesión confirmados arranca"
+check_eq "$(sv events lease.started)" 1 "el arranque deja un evento lease.started"
+check_has "$(sv start a 1 "$P0" s1)" "lease ambiguo" "el mismo proceso no toma dos leases"
+check_has "$(sv start a 1 "$P1" s0)" "lease ambiguo" "la misma sesión no toma dos leases"
+check_has "$(sv start a 0 "$P0" s0)" "no está reservado" "un lease no arranca dos veces"
+check_eq "$(sv start a 1 "$P1" s1)" running "el segundo implementador arranca"
+check_has "$(sv cancel a)" "leases iniciados" "no se cancela un plan con leases iniciados"
+
+# --- heartbeat y stale -------------------------------------------------------------------------------
+check_has "$(sv heartbeat a 0 "$P1" s0)" "no coincide" "un heartbeat con otra identidad se rechaza"
+BEFORE=$(sv events lease.started)
+check_eq "$(OFFSET=120 sv heartbeat a 0 "$P0" s0)" running "el heartbeat renueva el lease"
+check_eq "$(sv events lease.started)" "$BEFORE" "el heartbeat no escribe eventos"
+check_eq "$(OFFSET=360 sv reconcile)" "stale=1 released=0 human=1" "a los 5 min sin heartbeat el lease 1 queda stale y retenido"
+check_eq "$(sv lease a 0)" running "el lease 0, renovado a los 2 min, sigue running"
+check_eq "$(sv lease a 1)" stale "el lease 1 pasa a stale"
+check_eq "$(sv slots)" 3 "un lease stale conserva su slot"
+check_has "$(sv heartbeat a 1 "$P1" s1)" "intervención humana" "un lease stale no vuelve con un heartbeat"
+check_eq "$(OFFSET=360 sv reconcile --dry-run)" "stale=0 released=0 human=1" "dry-run informa el retenido"
+
+# --- liberación verificada ---------------------------------------------------------------------------
+kill "$P1"; wait "$P1" 2>/dev/null
+check_eq "$(OFFSET=360 sv reconcile)" "stale=0 released=0 human=1" "proceso muerto con sesión viva: no se libera"
+session s1 raise
+check_eq "$(OFFSET=360 sv reconcile)" "stale=0 released=0 human=1" "si el adaptador falla, no se libera"
+session s1 unknown
+check_eq "$(OFFSET=360 sv reconcile)" "stale=0 released=0 human=1" "sesión desconocida: no se libera"
+session s1 absent
+check_eq "$(OFFSET=360 sv reconcile --dry-run)" "stale=0 released=1 human=0" "dry-run dice que liberaría"
+check_eq "$(sv lease a 1)" stale "dry-run no escribe"
+check_eq "$(OFFSET=360 ADAPTER=0 sv reconcile)" "stale=0 released=0 human=1" "sin adaptador no se libera"
+check_eq "$(OFFSET=360 sv reconcile)" "stale=0 released=1 human=0" "proceso y sesión ausentes: se libera"
+check_eq "$(sv lease a 1)" released "el lease queda released"
+check_eq "$(sv events lease.released)" 1 "la liberación deja un evento lease.released"
+
+# --- cierre del lease y del plan ---------------------------------------------------------------------
+check_has "$(sv finish a 0)" "no se verificó" "no se cierra con el proceso vivo"
+kill "$P0"; wait "$P0" 2>/dev/null
+check_has "$(sv finish a 0)" "no se verificó" "no se cierra con la sesión viva"
+session s0 absent
+check_eq "$(sv plan a)" reserved "el plan sigue reservado mientras falte un lease"
+check_has "$(sv finish a 2)" "no está iniciado" "el reviewer sin arrancar no se cierra"
+check_eq "$(sv cancel d)" cancelled "un plan sin leases iniciados se cancela"
+check_eq "$(sv lease d 0)" cancelled "cancelar cancela sus leases"
+check_eq "$(sv plan b)" reserved "cancelar libera slots y promueve la cola"
+spawn; P2=$LAST; session s2 alive
+check_eq "$(sv start a 2 "$P2" s2)" running "arranca el reviewer"
+kill "$P2"; wait "$P2" 2>/dev/null; session s2 absent
+check_eq "$(sv finish a 2)" completed "el reviewer se cierra con salida verificada"
+check_eq "$(sv finish a 0)" completed "el lease 0 se cierra con salida verificada"
+check_eq "$(sv plan a)" closed "con todos los leases terminados el plan se cierra"
+check_eq "$(sv events plan.closed)" 1 "el cierre deja un evento plan.closed"
+check_eq "$(sv slots)" 2 "el plan cerrado ya no ocupa slots"
+
+# --- estado viejo y CLI ------------------------------------------------------------------------------
+check_eq "$(sv legacy b)" ok "se simula un estado anterior a los leases"
+check_eq "$(sv lease b 0)" reserved "un plan reservado sin leases los recibe al leerse"
+OUT=$(python3 "$ROOT/lib/supervisor.py" status)
+check_has "$OUT" '"verified_harnesses": []' "status: sin adaptadores reales registrados"
+check_has "$OUT" '"stale_after_seconds": 300' "status muestra el umbral de stale"
+check_has "$(python3 "$ROOT/lib/supervisor.py" reconcile --dry-run)" '"dry_run": true' "el CLI expone reconcile --dry-run"
+check_eq "$(stat -f %Lp "$STORE" 2>/dev/null || stat -c %a "$STORE")" 700 "el store es privado"
+
+echo "1..$N"
+[ "$FAILED" -eq 0 ]

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Propuesta local para supervisar agentes multiproveedor con leases, aprobaciones humanas y estado privado por máquina.">
+  <title>Supervisión local de agentes — BK</title>
+  <style>
+    :root { color-scheme: light; --ink:#22251f; --muted:#656a60; --paper:#f7f5ef; --card:#fffefa; --line:#deded3; --green:#315c4b; --green-bg:#e8f1e9; --amber:#795a16; --amber-bg:#f8efd7; --red:#8b3937; --red-bg:#f7e8e5; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(100% - 32px, 1040px); margin:0 auto; padding:48px 0 72px; }
+    header { max-width:760px; margin-bottom:32px; }
+    .eyebrow { color:var(--green); text-transform:uppercase; letter-spacing:.12em; font-size:.76rem; font-weight:750; }
+    h1 { font-size:clamp(2rem,5vw,3.4rem); line-height:1.08; letter-spacing:-.04em; margin:.45rem 0 1rem; }
+    h2 { font-size:1.3rem; margin:0 0 12px; letter-spacing:-.02em; }
+    p { margin:.35rem 0 .8rem; }
+    .lede { color:var(--muted); font-size:1.12rem; max-width:68ch; }
+    .status { display:inline-flex; align-items:center; gap:8px; padding:7px 11px; border-radius:99px; background:var(--amber-bg); color:var(--amber); font-weight:700; font-size:.88rem; }
+    .dot { width:8px; height:8px; border-radius:50%; background:currentColor; }
+    section { margin-top:22px; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; }
+    .card p:last-child { margin-bottom:0; }
+    .confirmed { border-top:4px solid var(--green); }
+    .pending { border-top:4px solid #bd8b29; }
+    .blocked { background:var(--red-bg); border-color:#e6c7c2; }
+    .tag { display:inline-block; margin-bottom:8px; color:var(--green); font-size:.72rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+    .pending .tag { color:var(--amber); }
+    .flow { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; counter-reset:step; }
+    .step { position:relative; min-height:152px; padding:17px 15px 14px; background:var(--card); border:1px solid var(--line); border-radius:12px; }
+    .step::before { counter-increment:step; content:counter(step); display:grid; place-items:center; width:27px; height:27px; margin-bottom:12px; border-radius:50%; background:var(--green-bg); color:var(--green); font-weight:800; }
+    .step strong { display:block; margin-bottom:5px; }
+    .step span { color:var(--muted); font-size:.9rem; }
+    code { padding:.12em .35em; background:#efeee7; border-radius:4px; font-size:.92em; overflow-wrap:anywhere; }
+    ul { margin:.35rem 0 0; padding-left:1.15rem; }
+    li+li { margin-top:.42rem; }
+    .footer { margin-top:24px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:.9rem; }
+    @media (max-width:760px) { .flow { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:520px) { main { padding-top:30px; } .grid,.flow { grid-template-columns:1fr; } .step { min-height:0; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">BK · propuesta de supervisión local</div>
+    <h1>Un supervisor. Varios proveedores. Un solo límite compartido.</h1>
+    <p class="lede">Codex supervisa por defecto. Claude Opus y Agy Neon pueden coordinar tareas independientes; implementadores de distintos proveedores trabajan en sus propios worktrees. El estado nuevo queda en esta máquina.</p>
+    <span class="status"><span class="dot"></span>Modelo en propuesta · gates de lanzamiento abiertos</span>
+  </header>
+
+  <section aria-labelledby="confirmed-title">
+    <h2 id="confirmed-title">Confirmado por Lautaro</h2>
+    <div class="grid">
+      <article class="card confirmed"><span class="tag">Parámetros acordados · 2026-11-27</span><h2>Leases y latidos</h2><p>El diseño acuerda que el worker renueve su lease cada <strong>60 segundos</strong>. Tras <strong>5 minutos</strong> sin señal, queda marcado <code>stale</code>, pero el sistema no libera issue ni slot automáticamente.</p><p>Esta rama ya guarda el lease de cada asignación y sus transiciones: <code>reconcile</code> marca <code>stale</code> y solo libera al verificar que terminaron el proceso y la sesión del harness; si no puede, conserva la reserva y pide intervención humana. Sin un adaptador de harness verificado, ningún lease arranca.</p></article>
+      <article class="card confirmed"><span class="tag">Parámetros acordados · 2026-11-27</span><h2>Estado local por 30 días</h2><p>Los hitos del bus y el estado terminal se conservan <strong>30 días</strong>. El estado vive bajo <code>${XDG_STATE_HOME:-~/.local/state}/bk/supervisor/</code>.</p><p>No se replica por Herdr, ADR-007, Git ni servicios remotos. Sin prompts, respuestas o transcripciones.</p></article>
+      <article class="card confirmed"><span class="tag">Límite ya acordado</span><h2>Slots de trabajo</h2><p>Máximo <strong>3 implementadores</strong>, contando subagentes internos y relanzamientos. El revisor tiene como máximo una revisión activa por PR; los orquestadores no consumen slots de implementador.</p></article>
+      <article class="card confirmed"><span class="tag">Flujo de trabajo</span><h2>GitHub y controles</h2><p>Se mantienen worktrees, PR, revisión cruzada cuando sea viable y <code>main</code> protegido. El supervisor no implementa por su rol, no aprueba por la persona, no mergea ni publica.</p></article>
+    </div>
+  </section>
+
+  <section aria-labelledby="flow-title">
+    <h2 id="flow-title">Cómo fluye una tarea</h2>
+    <div class="flow">
+      <div class="step"><strong>Plan visible</strong><span>Codex propone tarea, proveedor, modelo, rol, slots y razones con códigos cerrados.</span></div>
+      <div class="step"><strong>Confirmación humana</strong><span>La persona aprueba el plan antes del primer lanzamiento.</span></div>
+      <div class="step"><strong>Reserva atómica</strong><span>Implementado en esta rama: el árbitro reserva issue/PR y slots juntos. Aún no crea leases ni lanza workers.</span></div>
+      <div class="step"><strong>Seguimiento</strong><span>Pendiente: adaptadores para leases, heartbeat y reportes breves al bus local.</span></div>
+    </div>
+  </section>
+
+  <section class="grid" aria-label="Privacidad y bloqueos">
+    <article class="card"><h2>Separación de datos</h2><p>El feedback de ruteo va a <code>bk/routing/</code>; coordinación, propuestas y leases van a <code>bk/supervisor/</code>. Son stores locales distintos. Herdr puede mostrar sus estados existentes, pero este bus nuevo no se publica allí.</p><p>El sincronizador de máquinas replica commits del repo e instala mods de Herdr; no sincroniza este directorio local de estado.</p></article>
+    <article class="card blocked"><span class="tag" style="color:var(--red)">Bloqueante de corridas reales</span><h2>Aprobación en terminal separada</h2><p>La persona ejecuta <code>bk say</code> y <code>bk approve</code> desde una terminal humana separada, fuera del chat o árbol de procesos del agente. El hook y el CLI rechazan llamadas directas desde sesiones de agente. Son guardrails de aplicación, no aislamiento del sistema operativo.</p><p>El lanzamiento sigue bloqueado hasta verificar por harness que no haya una ruta de escape; un mensaje de chat, texto de plan o evento del bus no es aprobación.</p></article>
+  </section>
+
+  <section class="card pending">
+    <span class="tag">Pendiente de cerrar y verificar</span>
+    <h2>Gates antes del primer lanzamiento real</h2>
+    <ul>
+      <li>Completar y verificar ciclo de vida y recuperación de leases; la reserva de planes ya está implementada en esta rama.</li>
+      <li>Demostrar una frontera de aprobación humana que el agente no pueda invocar.</li>
+      <li>Validar identidad de modelo, eventos, guardrails y herramientas por harness; añadir el adaptador Agy.</li>
+      <li>Confirmar IDs exactos de catálogo para Codex, Agy, Hydrogen y SerHigh-Q.</li>
+      <li>Proponer y acordar las enmiendas correspondientes a ADR-004/005 en el kit.</li>
+      <li>Confirmar con pruebas que subagentes y relanzamientos cuentan en el límite global.</li>
+    </ul>
+  </section>
+
+  <p class="footer">Documento de concepto asociado a <a href="ADR-003-supervision-local-y-leases.md">ADR-003</a>. El ADR sigue en estado propuesto; estos parámetros confirmados no habilitan por sí solos el despacho ni el ruteo adaptativo.</p>
+</main>
+</body>
+</html>
