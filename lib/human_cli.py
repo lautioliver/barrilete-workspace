@@ -93,7 +93,10 @@ def human_only(args):
                 args = args[1:]
             continue
         if args[:1] == ["_hub"]:
-            return None
+            if args[1:2] != ["_do"]:
+                return None      # the other topics only read: none runs a bk command
+            args = args[1:]      # bk _hub _do … is bk _do … (_do is a topic of lib/herdr_hub.py)
+            continue
         words, i = [], 0
         while i < len(args):
             if args[i] == "--account":
