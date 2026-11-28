@@ -101,6 +101,7 @@ uso: bk [comando] [--dry-run]
                     feedback local del ruteo: dispatch y outcome leen JSON de stdin; lo de más de 180 días se
                     compacta en agregados mensuales sin IDs (aggregates los muestra)
   supervisor {propose|approve <run_id>|status|cancel <run_id>|reconcile} [--dry-run]
+                    approve y cancel piden confirmación de una persona (Touch ID o contraseña del sistema)
                     arbitraje local de planes y slots; propose lee JSON por stdin, approve reserva sin lanzar;
                     reconcile marca stale los leases sin heartbeat (5 min) y libera solo con salida verificada
   bot               verifica la GitHub App de los agentes (~/.config/bk/gh-app.json)
@@ -115,6 +116,7 @@ uso: bk [comando] [--dry-run]
                     --forget los saca de la lista sin retomarlos; bk --dry-run revive solo los lista
   peek [ventana] [n] ver qué hace un agente sin entrar (sin ventana: todos, últimas líneas)
   say [agente] "…"  responder a un agente desde una terminal humana separada, fuera de chats de agente
+                    Pide confirmación de una persona (Touch ID o contraseña del sistema) antes de escribir
                     Si el agente está trabajando, se encola y se escribe al terminar su turno (--now: ya)
                     Con Herdr, también por su número fijo de ventana: bk say 3 "…"
   watch [ventana]   pantalla de un agente en vivo, solo lectura (sin ventana: toma el próximo
@@ -128,6 +130,7 @@ uso: bk [comando] [--dry-run]
   tasks [--all]     las tareas de los agentes con su estado, su resultado y su carpeta
   tasks prune [--days N] [--yes]  borrar tareas terminadas (nunca las activas; sin --yes solo muestra)
   approve <tarea>   lanzar una tarea propuesta desde una terminal humana separada (reviewer de un PR)
+                    Pide confirmación de una persona (Touch ID o contraseña del sistema) antes de lanzar
   checkpoints [--json]  lo que te espera: planes por aprobar, reviewers propuestos, PRs para revisar o
                     mergear y lecciones propuestas (lo mismo que "Te esperan" en bk monitor). Los PRs salen
                     de una caché que se baja de GitHub en segundo plano cuando tiene más de 2 min

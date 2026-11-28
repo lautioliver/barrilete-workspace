@@ -62,4 +62,8 @@ row = hc.process_table()[os.getpid()]
 print("ok" if len(row) == 3 and row[0] == os.getppid() and "import human_cli" in row[2] else repr(row))'
 [ "$out" = ok ]; tap_check $? "process_table lee comm y args de ps" "got: $out"
 
+# #57: test_human_confirm.py (confirmación fail-closed, con backends falsos: nunca abre el diálogo real)
+tap_run out 0 python3 "$ROOT/scripts/agents/test_human_confirm.py"
+[ "$TAP_RC" = 0 ]; tap_check $? "test_human_confirm.py: sus pruebas pasan (sin diálogo real)" "rc=$TAP_RC"
+
 tap_done
