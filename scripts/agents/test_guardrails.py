@@ -197,6 +197,12 @@ class BkDeUnaPersona(unittest.TestCase):
                   "bk _do_run /tmp/l --dry-run -- approve t1", "bk _do_run --dry-run t -- say 3 si"):
             self.assertIsNotNone(frena(c), c)
 
+    def test_dry_run_como_valor_con_opciones_delante(self):
+        for c in ("bk --account w _do_run /tmp/l --dry-run -- approve t1",
+                  "bk --account w _do --title --dry-run -- say 3 si",
+                  "bk --account w _hub _do --cwd --dry-run -- supervisor approve x"):
+            self.assertIsNotNone(frena(c), c)
+
     def test_a_ojo_ve_do(self):
         from guardrails import a_ojo
         for c in ("bk _do -- approve t1", "bk _do_run /l t -- say 3 si", "bk _do --cwd /x -- supervisor approve x"):
