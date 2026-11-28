@@ -269,6 +269,13 @@ def metodo_api(args):
 def analizar_bk(args):
     """bk say/approve and supervisor approval are human-only, also inside bk _do, _hub _do and _do_run (#45)."""
     for _ in range(64):
+        # Leading options first (bk --account X _do_run …): a --dry-run among them makes the whole bk a dry run.
+        i = 0
+        while i < len(args) and args[i].startswith("-"):
+            if args[i] == "--dry-run":
+                return None
+            i += 2 if args[i] == "--account" else 1
+        args = args[i:]
         # bk _do [--cwd D] [--title T] -- <cmd> and bk _do_run <log> <title> [--] <cmd> run another bk, and
         # bk _hub _do is bk _do. Their own arguments go to bk as they are: a --dry-run there is a value.
         if args[:2] == ["_hub", "_do"]:
@@ -288,15 +295,7 @@ def analizar_bk(args):
             return None
         if "--dry-run" in args:      # bk takes it out wherever it is
             return None
-        i = 0
-        while i < len(args) and args[i].startswith("-"):
-            if args[i] == "--account":
-                i += 2
-            else:
-                i += 1
-        if i == 0:
-            break
-        args = args[i:]
+        break
     else:
         return "human-only BK command check: bk _do nested too deep to verify; run it from a separate human terminal"
     if args[:1] in (["say"], ["approve"]):

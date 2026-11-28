@@ -599,6 +599,7 @@ correría y no deja log ni aviso. Lo que es de una persona (`say`, `approve`, `s
 dentro de otro `_do`, `_hub _do` o `_do_run`) se chequea antes de soltarlo, con el proceso que pidió `bk _do`: desde
 un agente se niega; desde Herdr (el botón de aprobar del hub) se lanza. Los avisos de bk (`hd_notice`) van a una
 cola, un archivo por aviso en `~/.cache/bk/herdr-avisos/`, para que dos casi juntos no se pisen;
-`~/.cache/bk/herdr-aviso.json` sigue quedando con el último. El mod `bk-aviso` muestra la cola en orden, cada aviso con su nivel (uno de error queda 15 s a la
+`~/.cache/bk/herdr-aviso.json` sigue quedando con el último.
+El mod `bk-aviso` muestra la cola en orden, cada aviso con su nivel (uno de error queda 15 s a la
 vista, el resto 5 s; el que abre un mod con el clic, diez minutos), y la vacía; uno de hace más de diez minutos
 se borra sin mostrarse. Tests: `tests/test_hub.sh` y `tests/test_herdr_mods.sh`.
