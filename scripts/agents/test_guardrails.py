@@ -154,6 +154,36 @@ class CasosDeLaRevision(unittest.TestCase):
         self.assertIsNone(frena("git push origin feat # not main"))
 
 
+class BkDeUnaPersona(unittest.TestCase):
+    """bk say/approve y supervisor approve|cancel son de una persona, también dentro de _do o _do_run (#45)."""
+
+    def test_directo(self):
+        for c in ("bk say 3 si", "bk approve t1", "bk --account w approve t1", "bk supervisor approve x",
+                  "bk supervisor cancel x"):
+            self.assertIsNotNone(frena(c), c)
+
+    def test_dentro_de_do(self):
+        for c in ('bk _do -- say 3 "si"', "bk _do --cwd /tmp --title x -- approve t1",
+                  "bk _do -- supervisor approve x", "bk _do -- supervisor cancel x",
+                  "bk _do -- --account w say 3 si", "bk --account w _do -- approve t1"):
+            self.assertIsNotNone(frena(c), c)
+
+    def test_dentro_de_do_run(self):
+        for c in ("bk _do_run /tmp/l.log t -- say 3 si", "bk _do_run /tmp/l.log '' approve t1"):
+            self.assertIsNotNone(frena(c), c)
+
+    def test_anidado(self):
+        for c in ("bk _do -- _do -- approve t1", "bk _do -- _do_run /tmp/l t -- say 3 si",
+                  "bk _do_run /tmp/l t -- _do --cwd /tmp -- supervisor approve x"):
+            self.assertIsNotNone(frena(c), c)
+
+    def test_lo_demas_de_do_pasa(self):
+        for c in ("bk _do -- run 42", "bk _do --cwd /tmp --title 'Chat nuevo' -- chat",
+                  "bk _do --title approve -- open /tmp", "bk _do --cwd say -- run 1", "bk _hub issues",
+                  "bk _do_run /tmp/l t -- run 42", "bk --dry-run _do -- approve t1", "bk _do -- say --dry-run 3 si"):
+            self.assertIsNone(frena(c), c)
+
+
 class Permite(unittest.TestCase):
     def assertPermite(self, comando, **kw):
         self.assertIsNone(frena(comando, **kw), f"no debería frenar: {comando}")

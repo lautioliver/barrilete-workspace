@@ -62,4 +62,69 @@ row = hc.process_table()[os.getpid()]
 print("ok" if len(row) == 3 and row[0] == os.getppid() and "import human_cli" in row[2] else repr(row))'
 [ "$out" = ok ]; tap_check $? "process_table lee comm y args de ps" "got: $out"
 
+# bk _do suelta el comando (start_new_session) y su árbol termina en launchd: el chequeo va en _do, antes de
+# soltarlo, con el árbol de quien lo pidió (#45). do.py <quién> <args de _do…>: imprime negado/lanzado/dry.
+cat >"$TMP/do.py" <<'PY'
+import os, sys
+sys.path.insert(0, os.environ["HC_LIB"])
+os.environ["BK_CACHE_DIR"] = os.environ["HC_CACHE"]
+os.environ.pop("BK_TASK_DIR", None)
+os.environ.pop("BK_DRY", None)
+import herdr_hub as hh
+import human_cli as hc
+quien = sys.argv[1]
+ancestro = ("node", "node /opt/homebrew/bin/claude -p hola") if quien == "agente" else ("herdr-app", "/Applications/Herdr.app/herdr-app")
+hc.process_table = lambda: {100: (1,) + ancestro, 200: (100, "/bin/zsh", "-zsh")}
+hc.os.getppid = lambda: 200
+lanzados = []
+class Proc:
+    pid = 4242
+def popen(cmd, **kw):
+    lanzados.append(cmd)
+    return Proc()
+hh.subprocess.Popen = popen
+try:
+    r = hh.do(sys.argv[2:])
+except hh.Fail as exc:
+    print(f"negado: {exc}")
+else:
+    print("dry" if r.get("dry") else ("lanzado" if lanzados else "nada"))
+PY
+export HC_CACHE="$TMP/cache"
+do_() { tap_run out 0 python3 "$TMP/do.py" "$@"; }
+
+while IFS= read -r args; do
+  eval "set -- $args"
+  do_ agente --cwd "$TMP" -- "$@"
+  [ "${out%%:*}" = negado ]; tap_check $? "bk _do niega a un agente un comando de una persona" "_do -- $args → $out"
+done <<'EOF'
+say 3 si
+approve t1
+supervisor approve x
+supervisor cancel x
+--account w approve t1
+_do -- approve t1
+_do --cwd /tmp -- say 3 si
+_do_run /tmp/l t -- supervisor approve x
+EOF
+
+do_ agente --cwd "$TMP" -- say 3 si
+case "$out" in *"invoked from an agent session"*) r=0 ;; *) r=1 ;; esac
+[ "$r" = 0 ]; tap_check $? "bk _do dice por qué lo niega" "got: $out"
+
+while IFS= read -r args; do
+  eval "set -- $args"
+  do_ herdr --cwd "$TMP" -- "$@"
+  [ "$out" = lanzado ]; tap_check $? "bk _do desde Herdr (una persona) lanza el comando de una persona" "_do -- $args → $out"
+done <<'EOF'
+approve t1
+say 3 si
+supervisor approve x
+EOF
+
+do_ agente --cwd "$TMP" -- run 42
+[ "$out" = lanzado ]; tap_check $? "bk _do de un agente lanza lo que no es de una persona" "got: $out"
+do_ agente --cwd "$TMP" -- approve t1 --dry-run
+[ "$out" = dry ]; tap_check $? "bk _do --dry-run de un agente no corre nada y no se niega" "got: $out"
+
 tap_done
