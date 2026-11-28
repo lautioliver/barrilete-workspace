@@ -9,9 +9,11 @@ HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(dirname "$HERE")"
 TMP=$(mktemp -d)
 PIDS=()
 cleanup() { for p in "${PIDS[@]:-}"; do [ -n "$p" ] && kill "$p" 2>/dev/null; done; rm -rf "$TMP"; }
-trap cleanup EXIT
-N=0; FAILED=0
-check_eq() { N=$((N+1)); if [ "$1" = "$2" ]; then echo "ok $N - $3"; else echo "not ok $N - $3 (got '$1', want '$2')"; FAILED=$((FAILED+1)); fi; }
+# shellcheck disable=SC1091  # tap.sh se carga en tiempo de ejecución
+. "$ROOT/scripts/agents/tap.sh"
+tap_begin "tests/test_claude_code_adapter.sh"
+tap_at_exit cleanup
+check_eq() { local r=0; [ "$1" = "$2" ] || r=1; tap_check "$r" "$3" "got '$1', want '$2'"; }   # el id es el tercer argumento, literal
 
 export XDG_STATE_HOME="$TMP/state"
 export PYTHONPYCACHEPREFIX="$TMP/pycache"
@@ -93,7 +95,7 @@ check_eq "$(cc state s-ended-alive)" unknown "ended_at con el proceso vivo: unkn
 spawn; P2=$LAST; S2=$(cc pstart "$P2")
 cc mark s-gone "$P2" "$S2" "$T0" "$T1"
 cc mark s-gone-noend "$P2" "$S2" "$T0" -
-kill "$P2"; wait "$P2" 2>/dev/null
+kill "$P2"; wait "$P2" 2>/dev/null || true
 check_eq "$(cc state s-gone)" absent "ended_at y el proceso ausente: absent"
 check_eq "$(cc state s-gone-noend)" unknown "proceso ausente sin SessionEnd: unknown (Claude Code tiene evento de fin)"
 
@@ -184,8 +186,7 @@ check_eq "$(cc lease c1 start)" running "con la marca de la sesión: running"
 cc mark c-main "$P6" "$S6" "$T0" "$T1" c1 0
 check_eq "$(cc lease c1 finish)" "error: no se verificó la salida del proceso y de la sesión; el lease conserva issue y slot" \
   "SessionEnd con el proceso vivo: no se libera"
-kill "$P6"; wait "$P6" 2>/dev/null
+kill "$P6"; wait "$P6" 2>/dev/null || true
 check_eq "$(cc lease c1 finish)" completed "SessionEnd y el proceso ausente: completed"
 
-echo "1..$N"
-[ "$FAILED" -eq 0 ]
+tap_done
