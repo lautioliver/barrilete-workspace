@@ -252,9 +252,9 @@ caída, así que la lista puede traer chats que cerraste a propósito: para eso 
 
 ## Hablar con los agentes sin entrar
 - `bk peek [ventana]`: la pantalla de un agente (sin ventana: las últimas líneas de todos).
-- `bk say <ventana> "…"`: escribe en su ventana como si fuera tu teclado, así que vale como tu respuesta
-  (aprobar un plan, publicar una review). Pensado para que lo corras vos (`! bk say …` desde el chat):
-  un agente no aprueba en tu nombre.
+- `bk say <ventana> "…"`: escribe en su ventana como si fuera tu teclado; sirve para responder un menú o aprobar un plan.
+  Corré `bk say` desde una terminal humana separada, fuera del chat o la sesión del agente. Los guardrails bloquean el
+  comando dentro de herramientas de agentes y el CLI verifica el proceso que lo invoca.
 - `bk watch [ventana]`: espejo en vivo de un agente; sin ventana toma el próximo libre.
 - `bk fix <pr> "instrucción"`: implementer sobre la rama de un PR abierto, reusando su worktree.
 
@@ -305,7 +305,7 @@ eventos, en `~/.local/state/bk/tasks/<proyecto>/<id>/` (`task.json` y `events.js
   agente lo toma como su primer paso y `bk done` lo suelta. Si el candado es de otro agente vivo, `bk run` no lanza.
 - El agente cierra con `bk done pr <n>` (o `blockers`, `dropped "…"`, `escalate "…"`); si termina sin cerrarla queda
   `incomplete`, y `bk stop` la deja `cancelled`.
-- Su PR propone `pr<n>-reviewer`, que arranca solo con `bk approve`. Con `--orchestrated` (lo usa `/orchestrate`) no hay
+- Su PR propone `pr<n>-reviewer`, que arranca con `bk approve` desde una terminal humana separada. Con `--orchestrated` (lo usa `/orchestrate`) no hay
   propuesta: el orquestador lanza al reviewer.
 - `bk say` a un agente que trabaja se encola hasta que termine el turno (`--now` para ya).
 - `bk tasks` las lista con su carpeta; `bk tasks prune --yes` borra las terminadas (nada se borra solo).
@@ -439,7 +439,24 @@ dice qué haría y solo mira.
   actualiza recién al correr `bk checkpoints`. Sin red, la caché queda como estaba. Test: `tests/test_prs.sh`, con un
   `gh` falso.
 
+## Supervisión local (`bk supervisor`)
+`bk supervisor propose` lee un `bk.supervisor-plan.v1` cerrado desde stdin. `bk supervisor approve <run_id>` presenta el plan en una terminal humana separada y reserva issues/PRs y slots bajo un lock atómico: máximo tres implementadores, una review por PR. Si no hay slots, queda en cola; los hotfix van primero y no interrumpen. `bk supervisor status` muestra el estado local, con los leases de cada plan, y `cancel` libera una propuesta o reserva con confirmación humana, solo si ningún lease arrancó. El store y el bus están bajo `~/.local/state/bk/supervisor/` (o `XDG_STATE_HOME`); los planes terminados y los eventos se retienen 30 días. Una alta del bus cortada a mitad (la última línea sin fin de línea) se descarta; cualquier otra línea inválida frena sin modificar nada.
+
+Al reservar, cada asignación (incluidos subagentes y relanzamientos) recibe un lease `reserved`. El ciclo es `reserved → running → stale → completed|released`: un adaptador de harness confirma el inicio (PID con su hora de inicio y sesión del harness) y renueva el heartbeat cada 60 s en el estado, sin escribir eventos. `bk supervisor reconcile` marca `stale` un lease sin heartbeat por más de 5 minutos, sin soltar issue ni slot; si después llega un heartbeat con la misma identidad (PID, hora de inicio y sesión) y el adaptador confirma el proceso y la sesión vivos, vuelve a `running` y deja un evento `lease.recovered`. Lo libera (`released`) solo si verifica que el proceso y la sesión del harness ya no existen; si no puede verificarlo, lo informa en `needs_human`. No hay liberación forzada. Un plan se cierra cuando todos sus leases terminan, y eso promueve la cola. Hoy no hay ningún adaptador verificado (`verified_harnesses` vacío en `status`): ningún lease puede arrancar ni cerrarse, y `bk supervisor` no lanza agentes. `--dry-run` solo valida o muestra (`reconcile --dry-run` informa sin escribir).
+
 ## Retroalimentación (`bk learn`)
+`bk routing dispatch` y `bk routing outcome` leen un objeto JSON por stdin y anexan eventos validados al store local
+`${XDG_STATE_HOME:-~/.local/state}/bk/routing/events.jsonl`; `bk routing summary` muestra métricas de la ventana reciente
+y el archivo de agregados mensuales, sin IDs de tarea, issue o repo. Ningún evento individual dura más de 180 días: cuando la línea más
+vieja de una tarea (`run_id` + `task_id`) vence, la tarea entera se suma a `aggregates.json` (celdas por mes y
+proveedor/modelo/harness/rol/tipo/área, con conteos de conocidos y desconocidos, sin IDs ni texto) y sus líneas se
+borran. `dispatch` y `outcome` anexan primero y compactan bajo el mismo lock; `summary` compacta antes de leer.
+`bk routing compact [--dry-run]` lo hace a
+mano (o solo cuenta qué haría) y `bk routing aggregates` muestra los agregados. Todo pasa bajo un `flock` del store, y la
+compactación se puede cortar en cualquier punto: la próxima operación la termina o la deshace, y repetirla no cuenta dos
+veces. `bk --dry-run routing dispatch|outcome` solo valida; `bk --dry-run routing compact` informa sin escribir. Este registro no se sincroniza ni se envía a los proveedores. El contrato y sus gates siguen propuestos en
+[`ADR-002`](docs/decisions/ADR-002-retroalimentacion-del-ruteo-local.md); estos comandos no despachan agentes.
+
 `lib/learn.py` lee los transcripts y registra desvíos en el vault de Obsidian (`~/Documents/Obsidian Vault/agents`):
 barandas, verificaciones fallidas, contratos de subagentes (patrones automáticos) y tus correcciones, rechazos
 e interrupciones (para leer en el resumen del día). Un patrón repetido ≥3 veces en 14 días propone una lección;
@@ -495,7 +512,7 @@ apunta al hook. Al cambiar esa ruta en `settings.json` se pueden borrar el enlac
 ### Tareas en Herdr
 
 Las tareas del kit se ven con `alt+e`: por aprobar, te esperan y en marcha; Tab suma el historial. Enter sobre un
-reviewer propuesto corre `bk approve <tarea>`; sobre una tarea con agente, va a su pestaña. La barra de estado dice
+reviewer propuesto se lanza con `bk approve <tarea>` desde una terminal humana separada; sobre una tarea con agente, va a su pestaña. La barra de estado dice
 cuántas te esperan y su clic abre el mismo panel. Los datos son los de `bk _tasks` (lo mismo que `bk tasks --json`,
 con el título de cada issue o PR: de la caché de `bk ls`; lo que falta se le pide a GitHub, hasta 8 por vez).
 

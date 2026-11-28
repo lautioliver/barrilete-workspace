@@ -30,5 +30,7 @@ No hace falta ADR para cosas que se revierten con un PR sin costo.
 ## ADRs del proyecto
 
 - [ADR-001 — La lista de espacios compartida entre máquinas](ADR-001-lista-de-espacios-entre-maquinas.md) (propuesto)
+- [ADR-002 — Retroalimentación local del ruteo de agentes](ADR-002-retroalimentacion-del-ruteo-local.md) (propuesto)
+- [ADR-003 — Supervisión local, bus de coordinación y leases globales](ADR-003-supervision-local-y-leases.md) (propuesto)
 
 Los del kit están en [`kit/`](kit/).

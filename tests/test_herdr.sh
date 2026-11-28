@@ -24,6 +24,15 @@ has() { case "$1" in *"$2"*) echo si ;; *) echo no ;; esac; }
 STATE="$HOME/.cache/sketchybar/agents"
 plain() { PATH="$TMP/fake:$PATH" "$ROOT/bin/bk" "$@"; }                    # sin BK_BACKEND: decide la config
 bk()    { PATH="$TMP/fake:$PATH" BK_BACKEND=herdr "$ROOT/bin/bk" "$@"; }
+# bk say pasa antes por lib/human_cli.py, que lo niega si lo llama un agente: corriendo los checks desde Claude Code
+# o Codex, los casos de say fallarían. hbk usa una copia del repo (enlaces) con un human_cli falso que deja pasar y
+# anota que lo llamaron; el bloqueo de verdad se prueba aparte, con BK_TASK_DIR.
+HWS="$TMP/human-ws"; mkdir -p "$HWS/bin" "$HWS/lib"
+for f in "$ROOT"/* "$ROOT"/.[!.]*; do case "${f##*/}" in bin|lib) ;; *) ln -s "$f" "$HWS/${f##*/}" ;; esac; done
+for f in "$ROOT"/lib/*; do [ "${f##*/}" = human_cli.py ] || ln -s "$f" "$HWS/lib/${f##*/}"; done
+cp "$ROOT/bin/bk" "$HWS/bin/bk"
+printf 'import sys\nopen("%s/human_cli.log", "a").write(sys.argv[1] + "\\n")\n' "$TMP" >"$HWS/lib/human_cli.py"
+hbk()   { PATH="$TMP/fake:$PATH" BK_BACKEND=herdr "$HWS/bin/bk" "$@"; }
 log()   { cat "$HD_FAKE/log" 2>/dev/null; }
 st()    { jq "$@" "$HD_FAKE/state.json"; }
 tasks() { python3 "$ROOT/lib/tasks.py" "$@"; }
@@ -111,17 +120,21 @@ printf 'línea vieja\n⏺ Terminé el paso 2\n' >"$HD_FAKE/screen-t2"
 check_eq "$(bk peek i7 2>&1 | tail -1)" "⏺ Terminé el paso 2" "bk peek: lee la pantalla de la terminal"
 
 # --- bk say: escribe, respeta los menús y encola si el agente trabaja ---
-: >"$HD_FAKE/log"; bk say i7 "hola agente" >/dev/null 2>&1
+: >"$HD_FAKE/log"; : >"$TMP/human_cli.log"; hbk say i7 "hola agente" >/dev/null 2>&1
 check_eq "$(log)" "hc send t2 hola agente" "bk say: le escribe a la terminal del agente"
+check_eq "$(cat "$TMP/human_cli.log")" "say" "bk say: pasa antes por el control de terminal humana"
+: >"$HD_FAKE/log"; out=$(BK_TASK_DIR="$TMP" bk say i7 "desde una tarea" 2>&1); rc=$?
+check_eq "$rc $(log | grep -c send)" "1 0" "bk say desde una tarea (BK_TASK_DIR): se niega y no escribe"
+check_eq "$(has "$out" "terminal humana separada")" "si" "bk say desde una tarea: dice dónde correrlo"
 printf '¿Aprobar?\n❯ 1. Sí\n  2. No\nEnter to select · Esc to cancel\n' >"$HD_FAKE/screen-t2"
-: >"$HD_FAKE/log"; out=$(bk say i7 "mejor explicame" 2>&1); rc=$?
+: >"$HD_FAKE/log"; out=$(hbk say i7 "mejor explicame" 2>&1); rc=$?
 check_eq "$rc $(log | grep -c send)" "1 0" "bk say con un menú abierto: no manda texto"
 check_eq "$(has "$out" "tiene un menú abierto")" "si" "bk say con un menú abierto: avisa"
-: >"$HD_FAKE/log"; bk say i7 2 >/dev/null 2>&1
+: >"$HD_FAKE/log"; hbk say i7 2 >/dev/null 2>&1
 check_eq "$(log)" "hc send --force t2 2" "bk say con un menú abierto: un número pasa, forzado"
 rm -f "$HD_FAKE/screen-t2"; mkdir -p "$STATE"
 echo "{\"pane\": \"t2\", \"state\": \"working\", \"ts\": $(date +%s)}" >"$STATE/sesion-i7.json"
-: >"$HD_FAKE/log"; out=$(bk say i7 "para después" 2>&1)
+: >"$HD_FAKE/log"; out=$(hbk say i7 "para después" 2>&1)
 check_eq "$(log | grep -c send) $(has "$out" encolado)" "0 si" "bk say a un agente que trabaja: lo encola"
 bk _drain "$TD" t2 >/dev/null 2>&1
 check_eq "$(log)" "hc send t2 para después" "bk _drain: escribe lo encolado en su terminal"
@@ -408,7 +421,7 @@ T7=$(newtab claude); informa "$T7"; bk _adopt "$T7" >/dev/null 2>&1
 check_eq "$(st -r --arg t "$T7" '.terms[$t].labels | .["bk.win"] + " " + .["bk.id"]')" "proj-4 4" "adopción: si el nombre del proyecto ya es de otro chat, toma el primero libre (proj-4) y el número que sigue"
 : >"$HD_FAKE/log"; (cd "$REPO" && bk go 3 >/dev/null 2>&1)
 check_eq "$(log | grep -c "pane.focus {\"terminal\": \"$T4\"}")" "1" "bk go N: muestra la ventana con ese número fijo"
-: >"$HD_FAKE/log"; (cd "$REPO" && bk say 2 "hola vos" >/dev/null 2>&1)
+: >"$HD_FAKE/log"; (cd "$REPO" && hbk say 2 "hola vos" >/dev/null 2>&1)
 check_eq "$(log | grep -c '^hc send t2 hola vos')" "1" "bk say N: le escribe a la ventana con ese número"
 (cd "$REPO" && bk go 9 >/dev/null 2>&1); check_eq "$?" "1" "bk go N: un número que nadie tiene no inventa una ventana"
 # alt+h: el pedido de resumen llega desde afuera del chat (bk handoff --term), con o sin "y cerrá este chat"

@@ -13,4 +13,4 @@ No hay URLs ni usuarios: todo corre en la máquina de la persona, con sus permis
 | Paneles de Herdr | teclas `alt+…` → mods `bk-<vista>` | issues, PRs, te esperan, épica, agentes, nuevo, sesiones, resumen, cambios, ramas, uso, hoja de teclas, radio, aspecto |
 | Comandos internos | `bk _hub`, `bk _do`, `bk _side`, `bk _epica`, `bk _todo`… | solo los llaman los mods y los hooks; el contrato de cada tema de `_hub` está en `lib/herdr_hub.py` |
 
-Lo que un agente no hace en nombre de la persona: `bk say` escribe como si fuera su teclado (aprobar un plan, publicar una review), así que lo corre ella (`! bk say …`).
+Lo que un agente no hace en nombre de la persona: `bk say` escribe como si fuera su teclado (responder un menú o aprobar un plan) y `bk approve` lanza una tarea propuesta. La persona los corre desde una terminal humana separada, fuera del chat o la sesión del agente; guardrails y CLI bloquean llamadas desde sesiones de agente.

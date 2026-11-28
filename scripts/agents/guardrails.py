@@ -3,10 +3,10 @@
 never runs on its own (AGENTS.md, "Agent autonomy" / "Autonomía del agente" → "Never" / "Nunca"): merging or approving PRs, pushing to a
 trunk branch, creating tags or releases, touching branch protection and skipping hooks with --no-verify.
 
-It is registered in .claude/settings.json. It reads the hook JSON from stdin; if it blocks, it exits
-with 2 and explains on stderr what to do (Claude Code shows it to the agent). If the person asked for
-the step, they run it in the chat with `! <command>`. There is deliberately no variable to disable it:
-the agent could set it.
+It is registered in .claude/settings.json and .codex/hooks.json. It reads hook JSON from stdin; if it blocks,
+it exits with 2 and explains on stderr what to do. If the person asked for a guarded step, they usually run it
+in the chat with `! <command>`. The exceptions are `bk say` and `bk approve`, which require a separate human
+terminal. There is deliberately no variable to disable the hook: an agent could set it.
 
 They are guardrails, not a lock: they stop the common mistake (the agent that merges because it is the
 next step), not a script that does the same through another path. The lock is branch protection.
@@ -266,6 +266,25 @@ def metodo_api(args):
     return "GET"
 
 
+def analizar_bk(args):
+    """bk say/approve and supervisor approval are human-only."""
+    if "--dry-run" in args:
+        return None
+    i = 0
+    while i < len(args) and args[i].startswith("-"):
+        if args[i] == "--account":
+            i += 2
+        else:
+            i += 1
+    if i < len(args) and args[i] in ("say", "approve"):
+        return f"human-only BK command (bk {args[i]}); run it from a separate human terminal"
+    if i + 1 < len(args) and args[i:i + 2] == ["supervisor", "approve"]:
+        return "human-only BK command (bk supervisor approve); run it from a separate human terminal"
+    if i + 1 < len(args) and args[i:i + 2] == ["supervisor", "cancel"]:
+        return "human-only BK command (bk supervisor cancel); run it from a separate human terminal"
+    return None
+
+
 def analizar_gh(args):
     palabras, i = [], 0
     while i < len(args):
@@ -317,6 +336,8 @@ def analizar(texto, cwd, ctx):
                 m = analizar_git(resto, cwd, ctx)
             elif nombre == "gh":
                 m = analizar_gh(resto)
+            elif nombre == "bk":
+                m = analizar_bk(resto)
             elif nombre in SHELLS:
                 j = next((k for k, a in enumerate(resto) if re.match(r"^-[a-zA-Z]*c[a-zA-Z]*$", a)), None)
                 if j is not None and j + 1 < len(resto):
@@ -352,7 +373,9 @@ def tag_existe(nombre, cwd):
 
 def a_ojo(comando):
     """Last resort if the analysis fails: look for the blocked commands in the raw text."""
-    patrones = (r"\bgh\b[^\n;&|]*\bpr\s+merge\b", r"\bgh\b[^\n;&|]*\bpr\s+review\b[^\n;&|]*--approve",
+    patrones = (r"\bbk\s+(?:--dry-run\s+)?(?:say|approve)\b",
+                r"\bbk\s+supervisor\s+(?:approve|cancel)\b",
+                r"\bgh\b[^\n;&|]*\bpr\s+merge\b", r"\bgh\b[^\n;&|]*\bpr\s+review\b[^\n;&|]*--approve",
                 r"\bgh\s+release\s+(create|delete|edit|upload)\b", r"--no-verify\b", r"\bgit\s+tag\s+\S",
                 rf"\bgit\b[^\n;&|]*\bpush\b[^\n;&|]*\b({TRONCAL_RE})\b")
     if any(re.search(p, comando) for p in patrones):
@@ -407,9 +430,13 @@ def main():
     if not m:
         return 0
     corto = f"Blocked by the template guardrails (scripts/agents/guardrails.py): {m}."
-    texto = (f"{corto}\nAGENTS.md ('Agent autonomy' / 'Autonomía del agente'): an agent does not merge, does not approve PRs, does not create tags or releases, "
-             f"does not push to trunk branches and does not skip checks. Do not look for another way: if the person asked for it, "
-             f"ask them to run it (in Claude Code, in the chat):\n! {comando.strip()}")
+    if m.startswith("human-only BK command"):
+        texto = (f"{corto}\nAGENTS.md ('Agent autonomy' / 'Autonomía del agente'): this command carries a human response or approval. "
+                 f"The person must run it from a separate human terminal, outside any agent chat or session.")
+    else:
+        texto = (f"{corto}\nAGENTS.md ('Agent autonomy' / 'Autonomía del agente'): an agent does not merge, does not approve PRs, does not create tags or releases, "
+                 f"does not push to trunk branches and does not skip checks. Do not look for another way: if the person asked for it, "
+                 f"ask them to run it (in Claude Code, in the chat):\n! {comando.strip()}")
     # Each tool reads the reason from a different place: Claude Code and Codex from stderr with exit 2,
     # Copilot from the JSON (exit 2 denies anyway), Cursor from the JSON with exit 0.
     if herramienta == "copilot":

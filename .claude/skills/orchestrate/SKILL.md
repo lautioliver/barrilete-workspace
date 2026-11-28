@@ -54,7 +54,7 @@ Con un `bk` sin tareas (no tiene `bk tasks`), seguilo con `bk ls` y leé su resu
 
 Un agente `bk` cuenta para los 3 hasta que su tarea esté en un estado terminal, o, sin tareas, hasta que `bk ls` lo muestre terminado (no solo hasta que su PR esté abierto: sigue con el CI, la retro y las preguntas).
 
-**Cuando un agente `bk` pregunta** (texto, permiso o cuestionario; su tarea está en `waiting`, o `bk ls` lo muestra esperando), mostrá en tu chat la pregunta y sus opciones. La persona contesta con `! bk say <agente> "…"` (o `bk say <agente> <n>` para la opción `n` de un cuestionario). **Vos nunca mandás una aprobación.**
+**Cuando un agente `bk` pregunta** (texto, permiso o cuestionario; su tarea está en `waiting`, o `bk ls` lo muestra esperando), mostrá en tu chat la pregunta y sus opciones. La persona contesta desde una terminal humana separada con `bk say <agente> "…"` (o `bk say <agente> <n>` para la opción `n` de un cuestionario), fuera del chat o la sesión del agente. No ejecutes el comando con la herramienta Bash. **Vos nunca mandás una aprobación.**
 
 | `result` | Qué hacés |
 |---|---|

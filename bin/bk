@@ -97,6 +97,12 @@ uso: bk [comando] [--dry-run]
   sub [transcript]  ver en vivo un subagente (sin argumento: elegir de los vivos); clic en └ de la tira
   term [dir]        terminal rápida del proyecto, persistente (alt+x la muestra y la esconde)
   metrics [--repo R] por PR: costo, rondas de review, desvíos y si las lecciones los bajan
+  routing {dispatch|outcome|summary|compact [--dry-run]|aggregates}
+                    feedback local del ruteo: dispatch y outcome leen JSON de stdin; lo de más de 180 días se
+                    compacta en agregados mensuales sin IDs (aggregates los muestra)
+  supervisor {propose|approve <run_id>|status|cancel <run_id>|reconcile} [--dry-run]
+                    arbitraje local de planes y slots; propose lee JSON por stdin, approve reserva sin lanzar;
+                    reconcile marca stale los leases sin heartbeat (5 min) y libera solo con salida verificada
   bot               verifica la GitHub App de los agentes (~/.config/bk/gh-app.json)
   customize         estilo del workspace de tmux: header, tema y fuente (alt+,). Con Herdr, alt+, abre Aspecto:
                     tema, paneles, tamaño y fuente de la terminal
@@ -108,7 +114,7 @@ uso: bk [comando] [--dry-run]
                     consola vacía), cada uno en un chat de su proyecto. Con ids (o su principio), solo esos;
                     --forget los saca de la lista sin retomarlos; bk --dry-run revive solo los lista
   peek [ventana] [n] ver qué hace un agente sin entrar (sin ventana: todos, últimas líneas)
-  say [agente] "…"  escribirle a un agente (o a un chat por su nombre) como si estuvieras ahí; sin agente, al que te espera.
+  say [agente] "…"  responder a un agente desde una terminal humana separada, fuera de chats de agente
                     Si el agente está trabajando, se encola y se escribe al terminar su turno (--now: ya)
                     Con Herdr, también por su número fijo de ventana: bk say 3 "…"
   watch [ventana]   pantalla de un agente en vivo, solo lectura (sin ventana: toma el próximo
@@ -121,7 +127,7 @@ uso: bk [comando] [--dry-run]
   done <resultado>  (lo corre el agente) cerrar su tarea: pr <n> | blockers | dropped "…" | escalate "…"
   tasks [--all]     las tareas de los agentes con su estado, su resultado y su carpeta
   tasks prune [--days N] [--yes]  borrar tareas terminadas (nunca las activas; sin --yes solo muestra)
-  approve <tarea>   lanzar una tarea propuesta (el reviewer de un PR, pr<n>-reviewer)
+  approve <tarea>   lanzar una tarea propuesta desde una terminal humana separada (reviewer de un PR)
   checkpoints [--json]  lo que te espera: planes por aprobar, reviewers propuestos, PRs para revisar o
                     mergear y lecciones propuestas (lo mismo que "Te esperan" en bk monitor). Los PRs salen
                     de una caché que se baja de GitHub en segundo plano cuando tiene más de 2 min
@@ -1958,7 +1964,7 @@ case "${1:-}" in
   ls)          shift; ls_agents "${1:-}" ;;
   go)          shift; go "${1:-}" ;;
   peek)        shift; peek "${1:-}" "${2:-}" ;;
-  say)         shift; say "$@" ;;
+  say)         shift; python3 "$WS/lib/human_cli.py" say; say "$@" ;;
   watch)       shift; watch "${1:-}" ;;
   stop)        shift; stop "${1:-}" ;;
   clean)       shift; exec python3 "$WS/lib/clean.py" "$@" ;;
@@ -1967,7 +1973,7 @@ case "${1:-}" in
                exit $rc ;;
   tasks)       shift; case "${1:-}" in prune) shift; exec python3 "$TASKS" prune "$@" ;;
                                      *) exec python3 "$TASKS" list "$@" ;; esac ;;
-  approve)     shift; cmd_approve "${1:-}" ;;
+  approve)     shift; python3 "$WS/lib/human_cli.py" approve; cmd_approve "${1:-}" ;;
   checkpoints|ckpt) shift; exec python3 "$WS/lib/checkpoints.py" "$@" ;;
   _ended)      python3 "$TASKS" ended "${2:?}" || true ;;
   _prs)        cmd_prs ;;
@@ -1995,6 +2001,11 @@ case "${1:-}" in
   release)     shift; exec python3 "$WS/lib/land.py" release "$@" ;;
   learn)       shift; [ "${1:-}" = effect ] && { shift; exec python3 "$WS/lib/effect.py" "$@"; }
                exec python3 "$WS/lib/learn.py" "$@" ;;
+  routing)     shift; [ "$DRY" -eq 0 ] || set -- "$@" --dry-run
+               exec python3 "$WS/lib/routing_feedback.py" "$@" ;;
+  supervisor)  shift; [ "$DRY" -eq 0 ] || set -- "$@" --dry-run
+               if [ "$DRY" -eq 0 ]; then case "${1:-}" in approve|cancel) python3 "$WS/lib/human_cli.py" "$1" ;; esac; fi
+               exec python3 "$WS/lib/supervisor.py" "$@" ;;
   lessons)     lessons ;;
   bitacora)    shift; bitacora "$@" ;;
   song)        shift; exec "$WS/lib/song.sh" "$@" ;;

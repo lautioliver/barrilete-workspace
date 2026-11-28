@@ -305,6 +305,21 @@ class Registro(unittest.TestCase):
                 r = self.correr(comando, {"tool_name": "Bash", "tool_input": {"command": "ls"}}, cwd=d)
                 self.assertEqual(r.returncode, 0, (nombre, r.stderr))
 
+    def test_codex_ningun_hook_traba_fuera_del_repo_o_sin_su_script(self):
+        """Cada hook de .codex/hooks.json sale con 0 fuera de un repo, o en un repo que no tiene su script."""
+        import tempfile
+        with open(os.path.join(self.RAIZ, ".codex", "hooks.json"), encoding="utf-8") as f:
+            cfg = json.load(f)
+        comandos = [(evento, h["command"]) for evento, grupos in cfg["hooks"].items()
+                    for g in grupos for h in g["hooks"]]
+        self.assertTrue(any("codex_handoff.py" in c for _, c in comandos))
+        with tempfile.TemporaryDirectory() as afuera, tempfile.TemporaryDirectory() as repo:
+            subprocess.run(["git", "init", "-q", repo], check=True)
+            for cwd in (afuera, repo):
+                for evento, comando in comandos:
+                    r = self.correr(comando, {"tool_name": "Bash", "tool_input": {"command": "ls"}}, cwd=cwd)
+                    self.assertEqual(r.returncode, 0, (evento, cwd, comando, r.stderr))
+
 
 class Config(unittest.TestCase):
     def test_settings_registra_el_hook_para_bash(self):
@@ -318,8 +333,26 @@ class Config(unittest.TestCase):
         raiz = os.path.dirname(os.path.dirname(AQUI))
         with open(os.path.join(raiz, ".codex", "hooks.json"), encoding="utf-8") as f:
             cfg = json.load(f)
-        hooks = [h for g in cfg["hooks"]["PreToolUse"] if g["matcher"] == "Bash" for h in g["hooks"]]
+        hooks = [h for g in cfg["hooks"]["PreToolUse"] if g.get("matcher") == "Bash" for h in g["hooks"]]
         self.assertTrue(any("scripts/agents/guardrails.py" in h["command"] for h in hooks))
+
+    def test_codex_hooks_sin_claves_repetidas(self):
+        # Con una clave repetida (dos "PreToolUse"), el parser se queda con la última y el hook de guardrails
+        # desaparece sin aviso.
+        raiz = os.path.dirname(os.path.dirname(AQUI))
+        repetidas = []
+
+        def pares(items):
+            vistas = set()
+            for clave, _ in items:
+                if clave in vistas:
+                    repetidas.append(clave)
+                vistas.add(clave)
+            return dict(items)
+
+        with open(os.path.join(raiz, ".codex", "hooks.json"), encoding="utf-8") as f:
+            json.load(f, object_pairs_hook=pares)
+        self.assertEqual(repetidas, [])
 
     def test_copilot_registra_el_hook_para_bash(self):
         raiz = os.path.dirname(os.path.dirname(AQUI))
