@@ -260,6 +260,8 @@ caída, así que la lista puede traer chats que cerraste a propósito: para eso 
 
 - `bk run` reusa el kit: `routing.py` elige el rol y `prepare.sh --worktree` asigna el issue y crea el worktree.
 - `roles.yml` dice qué provider/modelo corre cada rol; un proyecto lo pisa con `.barrilete/roles.yml`.
+  El modo (`bk` o `sub`) también sale de ahí, pero `/orchestrate` lanza como agente `bk` solo al `implementer`:
+  `reviewer` e `implementer-light` corren siempre como `sub` (kit/ADR-004).
 - Perfiles de modelos (`bk profile`, `profiles.yml`): un juego de provider/modelo por rol (`normal`, `barato`, `a-fondo`, `codex`)
   que se cambia de una vez y vale para todos los proyectos. `bk profile barato` lo elige y `bk profile off` vuelve a
   `roles.yml`; en `alt+k` hay un renglón «Usar el perfil …» por perfil y «Perfiles de modelos y tareas…» abre el panel

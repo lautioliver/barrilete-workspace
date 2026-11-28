@@ -318,7 +318,8 @@ ambos "revisor, review-pr y contrato: los tests del PR corren en el worktree de 
 ! grep -Eq 'only runs .retro.sh. there|solo corre .retro.sh. ahí|only adds tests|apenas agrega|solo agrega tests' "$R" "$V" "$C" "${C%.md}.es.md" "$RAIZ/.claude/i18n/agents/reviewer.es.md" 2>/dev/null; tap_check $? "ya no quedan las frases viejas (el revisor solo corre retro.sh; el commit en rojo solo agrega tests)"
 ambos "revisor, review-pr y contrato: el revisor no corre verify.py (lo cubre el CI)" '(does not run `verify.py`|No corre `verify.py`)' "$R" "$V" "$C"
 ! grep -Eq 'red\.sh.*agents_map\.py.*verify\.py.*retro\.sh' "$R" "$V" "$C" "${C%.md}.es.md" "${V%.md}.es.md" "$RAIZ/.claude/i18n/agents/reviewer.es.md" 2>/dev/null; tap_check $? "ningún texto del revisor lista verify.py entre los scripts que corre"
-grep -Eq 'checkout de confianza|trusted checkout' "$C" && grep -Eq 'run \(the reviewer is the exception|se corren \(el revisor es la excepción' "$C" "${C%.md}.es.md"; tap_check $? "contrato (viñeta 1): el revisor es la excepción de cd <worktree> && …"
+ambos "contrato (viñeta 1): el revisor es la excepción de cd <worktree> && …" 'checkout de confianza|trusted checkout' "$C"
+ambos "contrato (viñeta 1): el revisor es la excepción de cd <worktree> && … (la excepción)" 'run \(the reviewer is the exception|se corren \(el revisor es la excepción' "$C"
 ambos "review-pr (Retro): retro.sh del checkout de confianza por ruta absoluta" '<root>/\.claude/skills/improve-skills/retro\.sh' "$V"
 ambos "implement-issue (paso 3): qué puede tener el commit en rojo" 'fixtures and stubs|fixtures y stubs' "$I"
 # 7. Restos en español en la instalación en inglés.
