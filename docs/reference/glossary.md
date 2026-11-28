@@ -28,6 +28,6 @@
 | desvío | Algo que un agente hizo mal y quedó registrado (baranda, verificación fallida, corrección) | `lib/learn.py`, `lib/deviations.py` | — |
 | marca de sesión (propuesto) | El archivo que escribe el hook de inicio de una sesión de un harness (`sessions/<harness>-<session_id>.json`, con `pid`, `process_start`, `ended_at`) para que el supervisor sepa si sigue viva; nunca prueba por sí sola | `sessions/<harness>-<session_id>.json` (ADR-003 de este repo) | — |
 | lease sin enlazar (propuesto) | Un lease `reserved`: todavía no se sabe qué proceso y sesión lo usan (un lease iniciado siempre tiene `session_id`) | `new_lease` (`lib/supervisor.py`) | — |
-| enlazar (propuesto) | Asociar a un lease una marca de sesión y su proceso; cuándo y cómo se elige la marca está abierto (ADR-003, *Preguntas abiertas*). Hoy `start_lease` recibe el `session_id` | `start_lease` (`lib/supervisor.py`) | — |
+| enlazar (propuesto) | Asociar a un lease, en `start_lease`, la marca más vieja con su `run_id` y su `lease_id` (que `bk run` pasa en el entorno) y un proceso vivo con ese PID y esa hora de inicio; sin marca, el lease queda `reserved` (ADR-003, *Enlace del lease*) | `start_lease` (`lib/supervisor.py`) | — |
 
 La columna Contexto queda en «—» mientras no haya contextos declarados (ver [contextos](contexts.md)). Un término que no está acá se propone en el PR que lo introduce.
