@@ -498,6 +498,17 @@ generada (`lib/bitacora.py` y el `scripts/agents/bitacora.py` del kit, que #343 
 
 `~/.config/tmux/tmux.conf` es un enlace simbólico a este repo: se edita acá y queda versionado.
 
+## OpenCode (v2.3.2) + guardrails BK
+
+El repo incluye integración local para OpenCode: `opencode.jsonc` + plugin `.opencode/plugins/bk-guardrails/`.
+Reutiliza `scripts/agents/guardrails.py`, `lib/land.py hook` y `scripts/agents/task_events.py` (sin duplicar lógica).
+
+- **Denegado por config**: `git push`, `git tag`, `gh release create`, `gh pr merge`, `bk say`, `bk approve`, `--no-verify`, `.env*`.
+- **Falla cerrado**: si el guardrail no puede correr, el plugin frena el shell; un deny de `lib/land.py hook` frena la edición.
+- **Pide confirmación**: `.github/**`, `package.json`, `gh workflow *`, los archivos del propio guardrail y los intérpretes (`bash`, `sh`, `python3`, `node`).
+- **Límites**: con `opencode run --auto` se auto-aprueban asks no denegados; sin `--auto` en no interactivo se rechazan; en TUI el ask debe confirmarlo una persona. `BK_TASK_DIR` controla eventos de tarea; sin él no se escriben. No reemplaza `githooks/reference-transaction`.
+- Detalle: `docs/agents/opencode.md`.
+
 ## Hook de estado (`hooks/agent_state.sh`)
 Un hook de Claude Code anota el estado de cada sesión (trabajando, te espera, terminó, en segundo plano), su rol, modelo,
 issue y pane en `~/.cache/sketchybar/agents/<sesión>.json`; de ahí leen `bk ls`, la tira, el riel, `bk monitor`, `bk s` y

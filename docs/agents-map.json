@@ -101,6 +101,20 @@
         "docs/reference/contexts.md"
       ],
       "reason": "the contexts or their paths in the map changed"
+    },
+    {
+      "when": [
+        "opencode.jsonc",
+        ".opencode/**",
+        "docs/agents/opencode.md"
+      ],
+      "review": [
+        "README.md",
+        "docs/development/architecture.md",
+        "AGENTS.md",
+        "docs/agents-map.json"
+      ],
+      "reason": "la integración de OpenCode con guardrails/hooks de BK cambió"
     }
   ],
   "contexts": [],
@@ -136,7 +150,9 @@
         "githooks/**",
         "lib/checks.sh",
         "lib/land.py",
-        "lib/tmux_guard.py"
+        "lib/tmux_guard.py",
+        "opencode.jsonc",
+        ".opencode/**"
       ]
     },
     {
@@ -377,6 +393,18 @@
       "name": "tests",
       "always": true,
       "run": "bash lib/checks.sh"
+    },
+    {
+      "name": "opencode-guardrails",
+      "when": [
+        "opencode.jsonc",
+        ".opencode/**",
+        "scripts/agents/guardrails.py",
+        "scripts/agents/task_events.py",
+        "lib/land.py",
+        "tests/test_opencode_guardrails.sh"
+      ],
+      "run": "bash tests/test_opencode_guardrails.sh"
     }
   ],
   "required": [
