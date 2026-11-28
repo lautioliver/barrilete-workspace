@@ -26,5 +26,8 @@
 | perfil | Un juego de provider/modelo por rol que se cambia de una vez | `lib/profiles.py`, `profiles.yml` | — |
 | cuenta | Una config de Claude Code o Codex propia, con las mismas conversaciones | `lib/accounts.py`, `bk account` | — |
 | desvío | Algo que un agente hizo mal y quedó registrado (baranda, verificación fallida, corrección) | `lib/learn.py`, `lib/deviations.py` | — |
+| marca de sesión (propuesto) | El archivo que escribe el hook de inicio de una sesión de un harness (`sessions/<harness>-<session_id>.json`, con `pid`, `process_start`, `ended_at`) para que el supervisor sepa si sigue viva; nunca prueba por sí sola | `sessions/<harness>-<session_id>.json` (ADR-003 de este repo) | — |
+| lease sin enlazar (propuesto) | Un lease `reserved`, o uno sin marca de sesión enlazada, del que todavía no se sabe qué proceso y sesión lo usan | `new_lease` (`lib/supervisor.py`) | — |
+| enlazar (propuesto) | Asociar a un lease, en `start_lease`, una marca de sesión y su proceso; cómo se elige está abierto (ADR-003, *Preguntas abiertas*) | `start_lease` (`lib/supervisor.py`) | — |
 
 La columna Contexto queda en «—» mientras no haya contextos declarados (ver [contextos](contexts.md)). Un término que no está acá se propone en el PR que lo introduce.
