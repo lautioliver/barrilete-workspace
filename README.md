@@ -502,7 +502,7 @@ Reutiliza `scripts/agents/guardrails.py`, `lib/land.py hook` y `scripts/agents/t
 
 - **Denegado por config**: `git push`, `git tag`, `gh release create`, `gh pr merge`, `bk say`, `bk approve`, `--no-verify`, `.env*`.
 - **Falla cerrado**: si el guardrail no puede correr, el plugin frena el shell; un deny de `lib/land.py hook` frena la edición.
-- **Pide confirmación**: `.github/**`, `package.json`, `gh workflow *`.
+- **Pide confirmación**: `.github/**`, `package.json`, `gh workflow *`, los archivos del propio guardrail y los intérpretes (`bash`, `sh`, `python3`, `node`).
 - **Límites**: con `opencode run --auto` se auto-aprueban asks no denegados; sin `--auto` en no interactivo se rechazan; en TUI el ask debe confirmarlo una persona. `BK_TASK_DIR` controla eventos de tarea; sin él no se escriben. No reemplaza `githooks/reference-transaction`.
 - Detalle: `docs/agents/opencode.md`.
 

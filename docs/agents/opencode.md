@@ -15,7 +15,7 @@ Integración de OpenCode v2.3.2 con los guardrails del proyecto, sin duplicar l�
 
 - `opencode.jsonc` en la raíz del repo (no en `.opencode/`) define permisos nativos OpenCode:
   - `deny`: `git push *`, `git tag *`, `gh release create *`, `gh pr merge *`, `bk say *`, `bk approve *` (se corren solo desde una terminal humana, ver `AGENTS.md`), `*--no-verify*`, `.env*`.
-  - `ask`: `.github/**`, `package.json`, `gh workflow *`.
+  - `ask`: `.github/**`, `package.json`, `gh workflow *`, los archivos del propio guardrail (`opencode.jsonc`, `.opencode/**`, `scripts/agents/guardrails.py`, `githooks/**`) y los intérpretes (`bash`, `sh`, `python3`, `node`, por defecto: no están en allow porque evadirían los deny).
   - `allow`: lecturas/comandos seguros habituales (`git status/diff/log/show/branch/rev-parse`, `bk *`, etc.).
 - El plugin se registra como paquete local: `./.opencode/plugins/bk-guardrails` con `options.scriptsDir`.
 
