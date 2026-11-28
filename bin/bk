@@ -2004,7 +2004,7 @@ case "${1:-}" in
   routing)     shift; [ "$DRY" -eq 0 ] || set -- "$@" --dry-run
                exec python3 "$WS/lib/routing_feedback.py" "$@" ;;
   supervisor)  shift; [ "$DRY" -eq 0 ] || set -- "$@" --dry-run
-               if [ "$DRY" -eq 0 ]; then case "$1" in approve|cancel) python3 "$WS/lib/human_cli.py" "$1" ;; esac; fi
+               if [ "$DRY" -eq 0 ]; then case "${1:-}" in approve|cancel) python3 "$WS/lib/human_cli.py" "$1" ;; esac; fi
                exec python3 "$WS/lib/supervisor.py" "$@" ;;
   lessons)     lessons ;;
   bitacora)    shift; bitacora "$@" ;;
