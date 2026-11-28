@@ -39,16 +39,18 @@ tap_run out 0 git init -q -b main "$REPO"
 tap_run out 0 git -C "$REPO" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
 cd "$REPO"
 
-# open_chat <proveedor> <args de bk chat…>: corre bk chat con ese proveedor (sin terminal, así no pregunta) y deja en
-# $cmd el comando del primer new-session/new-window, y en $envs los -e que le pasó.
-open_chat() {
+# open_bk <proveedor> <args de bk…>: corre bk con ese proveedor (sin terminal: stdin de /dev/null, así no pregunta)
+# y deja en $cmd el comando del primer new-session/new-window, y en $envs los -e que le pasó.
+open_bk() {
   local p="$1"; shift
   : >"$LOG"
   export BK_CHAT_PROVIDER="$p"           # vacío es lo mismo que sin definir: el de siempre
-  tap_run out 0 "$ROOT/bin/bk" chat "$@"
+  tap_run out 0 "$ROOT/bin/bk" "$@" </dev/null
   cmd=$(awk -F'\t' '$1 == "new-session" || $1 == "new-window" { print $(NF-1); exit }' <"$LOG")
   envs=$(awk -F'\t' '$1 == "new-session" || $1 == "new-window" { for (i = 1; i < NF; i++) if ($i == "-e") print $(i+1); exit }' <"$LOG")
 }
+# open_chat <proveedor> <args de bk chat…>: lo mismo con bk chat
+open_chat() { local p="$1"; shift; open_bk "$p" chat "$@"; }
 cmd=""; envs=""
 
 # --- #48: BK_CHAT_PROVIDER cambia el comando del chat del proyecto ---
@@ -90,11 +92,25 @@ unset BK_ACCOUNT_CODEX BK_ACCOUNT_CLAUDE
 # --- un nombre que no está en la lista no abre claude en su lugar: falla y lo dice ---
 : >"$LOG"
 export BK_CHAT_PROVIDER=gpt
-tap_run out 1 "$ROOT/bin/bk" chat --suelto
+tap_run out 1 "$ROOT/bin/bk" chat --suelto </dev/null
 [[ "$out" == *"BK_CHAT_PROVIDER=gpt no es un proveedor del chat"* ]]
 tap_check $? "BK_CHAT_PROVIDER desconocido falla y lo dice" "$out"
 n=$(awk -F'\t' '$1 == "new-session" || $1 == "new-window" { c++ } END { print c + 0 }' <"$LOG")
 [ "$n" = 0 ]
 tap_check $? "BK_CHAT_PROVIDER desconocido no abre ningún chat" "abrió $n"
+
+# --- quien le pasa a bk chat su comando (retomar una sesión: WS_CHAT_CMD) no lo pierde por BK_CHAT_PROVIDER ---
+export WS_CHAT_CMD="claude --resume abc"
+open_chat codex --suelto
+[ "$cmd" = "claude --resume abc" ]; tap_check $? "BK_CHAT_PROVIDER no pisa el WS_CHAT_CMD de quien llama" "$cmd"
+unset WS_CHAT_CMD
+
+# --- bk (el chat del workspace del proyecto) abre el proveedor de BK_CHAT_PROVIDER, con su cuenta ---
+export BK_ACCOUNT_CODEX=cdx
+open_bk codex ws "$REPO"
+[ "$cmd" = "codex; exec \$SHELL" ]; tap_check $? "bk con BK_CHAT_PROVIDER abre ese proveedor en el workspace" "$cmd"
+printf '%s\n' "$envs" | grep -qx "CODEX_HOME=$ACC/cdx"
+tap_check $? "bk con BK_CHAT_PROVIDER pasa la cuenta de ese proveedor" "$(printf '%s' "$envs" | tr '\n' ' ')"
+unset BK_ACCOUNT_CODEX
 
 tap_done
