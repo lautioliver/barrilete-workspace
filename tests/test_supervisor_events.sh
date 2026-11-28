@@ -40,7 +40,7 @@ class Adapter:
 
 sv.HARNESS_ADAPTERS["claude-code"] = Adapter()
 sv.require_terminal = lambda action: None
-sv.require_human = lambda action: None
+sv.require_human = lambda action, run_id: None
 real_now = sv.now
 sv.now = lambda: real_now() + timedelta(seconds=offset)
 real_write, calls = sv.write_state, [0]

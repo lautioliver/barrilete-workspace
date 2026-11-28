@@ -29,9 +29,12 @@ bk()    { PATH="$TMP/fake:$PATH" BK_BACKEND=herdr "$ROOT/bin/bk" "$@"; }
 # anota que lo llamaron; el bloqueo de verdad se prueba aparte, con BK_TASK_DIR.
 HWS="$TMP/human-ws"; mkdir -p "$HWS/bin" "$HWS/lib"
 for f in "$ROOT"/* "$ROOT"/.[!.]*; do case "${f##*/}" in bin|lib) ;; *) ln -s "$f" "$HWS/${f##*/}" ;; esac; done
-for f in "$ROOT"/lib/*; do [ "${f##*/}" = human_cli.py ] || ln -s "$f" "$HWS/lib/${f##*/}"; done
+for f in "$ROOT"/lib/*; do case "${f##*/}" in human_cli.py|human_confirm.py) ;; *) ln -s "$f" "$HWS/lib/${f##*/}" ;; esac; done
 cp "$ROOT/bin/bk" "$HWS/bin/bk"
 printf 'import sys\nopen("%s/human_cli.log", "a").write(sys.argv[1] + "\\n")\n' "$TMP" >"$HWS/lib/human_cli.py"
+# #57: human_confirm real abre el diálogo de Touch ID: aquí un stub que anota lo que le piden y responde según
+# HC_STUB (ok | cancel). Nunca abre UI; bk lo llama con <operación> <destino>, igual que el real.
+printf 'import os, sys\nopen("%s/confirm.log", "a").write(" ".join(sys.argv[1:]) + "\\n")\nsys.exit(0 if os.environ.get("HC_STUB", "ok") == "ok" else 1)\n' "$TMP" >"$HWS/lib/human_confirm.py"
 hbk()   { PATH="$TMP/fake:$PATH" BK_BACKEND=herdr "$HWS/bin/bk" "$@"; }
 log()   { cat "$HD_FAKE/log" 2>/dev/null; }
 st()    { jq "$@" "$HD_FAKE/state.json"; }
@@ -136,6 +139,16 @@ rm -f "$HD_FAKE/screen-t2"; mkdir -p "$STATE"
 echo "{\"pane\": \"t2\", \"state\": \"working\", \"ts\": $(date +%s)}" >"$STATE/sesion-i7.json"
 : >"$HD_FAKE/log"; out=$(hbk say i7 "para después" 2>&1)
 check_eq "$(log | grep -c send) $(has "$out" encolado)" "0 si" "bk say a un agente que trabaja: lo encola"
+# #57: la confirmación va una sola vez, con el destino resuelto; el texto del mensaje no llega al diálogo
+: >"$TMP/confirm.log"; : >"$HD_FAKE/log"; hbk say --now i7 "hola confirmado" >/dev/null 2>&1
+check_eq "$(wc -l <"$TMP/confirm.log" | tr -d ' ')" "1" "bk say --now i7: confirma exactamente una vez"
+check_eq "$(grep -c 'hola confirmado' "$TMP/confirm.log")" "0" "bk say --now i7: el texto del mensaje no va al diálogo"
+check_eq "$(cat "$TMP/confirm.log")" "bk say i7" "bk say --now i7: el destino confirmado es la ventana resuelta"
+check_eq "$(log | grep -c send)" "1" "bk say --now i7 confirmado: escribe una vez"
+: >"$TMP/confirm.log"; : >"$HD_FAKE/log"; out=$(hbk say --now "destino automatico" 2>&1); rc=$?
+check_eq "$rc $(wc -l <"$TMP/confirm.log" | tr -d ' ') $(log | grep -c send) $(has "$out" "te esperan")" "1 0 0 si" "bk say automático ambiguo: no confirma ni escribe, y lista a quién"
+: >"$TMP/confirm.log"; : >"$HD_FAKE/log"; out=$(HC_STUB=cancel hbk say --now i7 "no debe salir" 2>&1); rc=$?
+check_eq "$rc $(log | grep -c send) $(grep -c 'no debe salir' "$HD_FAKE/log" 2>/dev/null) $(has "$out" "confirmación denegada")" "1 0 0 si" "bk say cancelado: no escribe, no encola y lo dice"
 bk _drain "$TD" t2 >/dev/null 2>&1
 check_eq "$(log)" "hc send t2 para después" "bk _drain: escribe lo encolado en su terminal"
 
