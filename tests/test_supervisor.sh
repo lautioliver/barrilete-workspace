@@ -149,7 +149,22 @@ check_eq "$(OFFSET=360 sv reconcile)" "stale=1 released=0 human=1" "a los 5 min 
 check_eq "$(sv lease a 0)" running "el lease 0, renovado a los 2 min, sigue running"
 check_eq "$(sv lease a 1)" stale "el lease 1 pasa a stale"
 check_eq "$(sv slots)" 3 "un lease stale conserva su slot"
-check_has "$(sv heartbeat a 1 "$P1" s1)" "intervención humana" "un lease stale no vuelve con un heartbeat"
+check_has "$(OFFSET=360 sv heartbeat a 1 "$P0" s1)" "no coincide" "un lease stale no vuelve con otra identidad"
+session s1 unknown
+check_has "$(OFFSET=360 sv heartbeat a 1 "$P1" s1)" "sigue stale" "sin sesión confirmada un lease stale no vuelve"
+session s1 absent
+check_has "$(OFFSET=360 sv heartbeat a 1 "$P1" s1)" "sigue stale" "con la sesión ausente un lease stale no vuelve"
+session s1 alive
+check_has "$(OFFSET=360 ADAPTER=0 sv heartbeat a 1 "$P1" s1)" "no hay adaptador" "sin adaptador un lease stale no vuelve"
+check_eq "$(sv lease a 1)" stale "los heartbeats rechazados lo dejan stale"
+check_eq "$(sv events lease.recovered)" 0 "un heartbeat rechazado no escribe lease.recovered"
+check_eq "$(OFFSET=360 sv heartbeat a 1 "$P1" s1)" running "misma identidad con proceso y sesión vivos: vuelve a running"
+check_eq "$(sv field a 1 stale_at)" None "al volver se limpia stale_at"
+check_eq "$(sv events lease.recovered)" 1 "la recuperación deja un evento lease.recovered"
+check_eq "$(OFFSET=420 sv heartbeat a 1 "$P1" s1)" running "un heartbeat común después no escribe otro evento"
+check_eq "$(sv events lease.recovered)" 1 "sigue habiendo un solo lease.recovered"
+check_eq "$(OFFSET=650 sv heartbeat a 0 "$P0" s0)" running "el lease 0 se renueva"
+check_eq "$(OFFSET=730 sv reconcile)" "stale=1 released=0 human=1" "sin heartbeat otra vez, el lease 1 vuelve a stale"
 check_eq "$(OFFSET=360 sv reconcile --dry-run)" "stale=0 released=0 human=1" "dry-run informa el retenido"
 
 # --- liberación verificada ---------------------------------------------------------------------------

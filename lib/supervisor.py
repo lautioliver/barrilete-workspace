@@ -24,12 +24,14 @@ LOCK = os.path.join(STORE_DIR, ".lock")
 SCHEMA = "bk.supervisor.v1"
 PLAN_SCHEMA = "bk.supervisor-plan.v1"
 EVENT_TYPES = {"plan.proposed", "plan.approved", "plan.queued", "plan.reserved", "plan.cancelled",
-               "plan.closed", "lease.started", "lease.stale", "lease.completed", "lease.released"}
+               "plan.closed", "lease.started", "lease.stale", "lease.recovered", "lease.completed",
+               "lease.released"}
 REASON_CODES = {"proposed", "human_approved", "slot_limit", "cancelled", "queue_promoted", "all_leases_ended",
-                "adapter_confirmed", "heartbeat_timeout", "verified_exit"}
+                "adapter_confirmed", "heartbeat_timeout", "heartbeat_recovered", "verified_exit"}
 PLAN_STATUSES = {"pending", "queued", "reserved", "cancelled", "closed"}
 PLAN_TERMINAL = {"cancelled", "closed"}
-# reserved -> running -> stale; running|stale -> completed|released (only with verified exit);
+# reserved -> running -> stale; stale -> running (same identity, process and session verified alive);
+# running|stale -> completed|released (only with verified exit);
 # reserved -> cancelled (only before start, together with its plan).
 LEASE_STATUSES = {"reserved", "running", "stale", "completed", "released", "cancelled"}
 LEASE_ACTIVE = {"reserved", "running", "stale"}
@@ -671,22 +673,32 @@ def start_lease(run_id, lease_id, pid, process_start, session_id):
 
 
 def heartbeat_lease(run_id, lease_id, pid, process_start, session_id):
-    """Renews a running lease (every HEARTBEAT_SECONDS). Updates state only; it writes no bus event."""
+    """Renews a running lease (every HEARTBEAT_SECONDS). Updates state only; it writes no bus event.
+    A stale lease comes back to running only with the same PID, start time and session, and with the
+    process and the harness session verified alive (e.g. after the machine slept); that writes
+    lease.recovered. Anything unverifiable keeps it stale."""
     identifier(run_id, "run_id")
     identifier(lease_id, "lease_id")
     validate_identity(pid, process_start, session_id)
     with locked(write=True):
         state = read_state()
-        _record, assignment, lease = find_lease(state, run_id, lease_id)
+        record, assignment, lease = find_lease(state, run_id, lease_id)
         require_adapter(assignment)
-        if lease["status"] != "running":
-            fail(f"el lease no está corriendo ({lease['status']}); un lease stale requiere intervención humana")
+        if lease["status"] not in ("running", "stale"):
+            fail(f"el lease no está corriendo ({lease['status']})")
         if (lease["pid"], lease["process_start"], lease["session_id"]) != (pid, process_start, session_id):
             fail("la identidad no coincide con la del lease")
         if process_state(pid, process_start) != "alive":
             fail("el proceso del lease no está vivo")
+        recovered = lease["status"] == "stale"
+        if recovered and harness_state(assignment, session_id) != "alive":
+            fail("el adaptador no confirmó la sesión del harness; el lease sigue stale")
         lease["last_heartbeat_at"] = iso()
+        if recovered:
+            lease.update(status="running", stale_at=None)
         write_state(state)
+        if recovered:
+            append_event_locked("lease.recovered", record["plan"], "heartbeat_recovered", assignment)
     return {"run_id": run_id, "lease_id": lease_id, "status": "running"}
 
 
