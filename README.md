@@ -106,7 +106,8 @@ pisan con los del repo (se editan acá).
 - **Un espacio por proyecto**: `bk` en la carpeta del proyecto abre (o muestra) el espacio `<proyecto>` con su
   chat en la pestaña `chat`. `bk chat` pregunta qué proveedor usar (`agy`, `codex`, `cc` o `cursor`) y suma otra pestaña (`chat-2`…); `bk chat --rama X` abre el espacio
   `<proyecto>-<x>` en su worktree y `bk chat --suelto` va al espacio `chats`. `BK_CHAT_PROVIDER=<proveedor>` lo elige sin
-  preguntar (con tmux, también en `--suelto`, que abre ese proveedor con su cuenta); un nombre que no está en la lista falla.
+  preguntar y fija qué abre, con la cuenta de ese proveedor (con tmux, también el chat de `bk` y el de `--suelto`); en `bk chat`,
+  y con tmux también en `bk`, un nombre que no está en la lista falla.
 - **Una pestaña por agente**: `bk run`, `fix`, `review`, `plan` y `orchestrate` lanzan al agente en una pestaña
   del espacio de su proyecto (`i42`, `pr57`…) sin sacarte de la que estás mirando. Herdr muestra su estado.
 - **Nombres vivos** (`lib/names.py`): el título que Claude le pone a un chat sale del primer mensaje y no cambia más.

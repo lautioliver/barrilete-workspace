@@ -1002,11 +1002,13 @@ workspace() {
     # El chat sobrevive a un /exit: vuelve a una shell en la misma carpeta
     # La cuenta de donde se abre (bk account use, o BK_ACCOUNT=x bk) pasa a la sesión nueva; new-session -e
     # también la deja en el entorno de la sesión, como bk account use
-    local CTA=() cx account_provider
-    account_provider=$(chat_account_provider "${WS_CHAT_PROVIDER:-${BK_CHAT_PROVIDER:-cc}}")
+    # El proveedor (BK_CHAT_PROVIDER, o el de un resumen) da el comando, si quien llama no trae uno, y la cuenta
+    local CTA=() cx account_provider wprov="${WS_CHAT_PROVIDER:-${BK_CHAT_PROVIDER:-cc}}" wcmd="${WS_CHAT_CMD:-}"
+    if [ -z "$wcmd" ]; then wcmd=$(chat_provider_cmd "$wprov") || { bad_chat_provider "$wprov"; exit 1; }; fi
+    account_provider=$(chat_account_provider "$wprov")
     [ -z "$account_provider" ] || account_args "$account_provider"
     chat=$(tmux new-session -d -P -F '#{pane_id}' -s "$WS_SESSION" -n main -c "$dir" -x "$cols" -y "$lines" \
-           -e "BK_PROJECT=$top" "${CTA[@]+"${CTA[@]}"}" "${WS_CHAT_CMD:-claude}; exec \$SHELL")
+           -e "BK_PROJECT=$top" "${CTA[@]+"${CTA[@]}"}" "$wcmd; exec \$SHELL")
     [ -z "$account_provider" ] || [ -z "$(account_of "$account_provider")" ] || tmux set-option -t "$WS_SESSION" "@bk_account_$account_provider" "$(account_of "$account_provider")"
     [ -z "$cx" ] || { BK_FROM="$WS_SESSION" account_use "$cx" >/dev/null; }
     tmux set-environment -t "$WS_SESSION" BK_PROJECT "$top"
@@ -1314,16 +1316,14 @@ chat_branch_wt() {
   CHAT_SLUG="$slug"; CHAT_WT="$wt"
 }
 
-# set_chat_provider <nombre>: fija BK_CHAT_PROVIDER y el comando que abre (WS_CHAT_CMD). Lista cerrada, para no
-# evaluar texto ingresado; otro nombre falla.
-set_chat_provider() {
-  case "$1" in
-    agy) BK_CHAT_PROVIDER=agy; WS_CHAT_CMD=agy ;;
-    codex) BK_CHAT_PROVIDER=codex; WS_CHAT_CMD=codex ;;
-    cc|claude) BK_CHAT_PROVIDER=cc; WS_CHAT_CMD=claude ;;
-    cursor) BK_CHAT_PROVIDER=cursor; WS_CHAT_CMD=cursor-agent ;;
-    *) return 1 ;;
-  esac
+# chat_provider_cmd <nombre>: el comando que abre cada proveedor del chat. Lista cerrada, para no evaluar texto
+# ingresado; otro nombre falla.
+chat_provider_cmd() {
+  case "$1" in agy) echo agy ;; codex) echo codex ;; cc|claude) echo claude ;; cursor) echo cursor-agent ;; *) return 1 ;; esac
+}
+
+bad_chat_provider() {
+  printf 'bk: BK_CHAT_PROVIDER=%s no es un proveedor del chat (agy, codex, cc o cursor)\n' "$1" >&2
 }
 
 # chat_account_provider <proveedor del chat>: de qué proveedor es la cuenta que se le pasa (bk account); agy y
@@ -1332,13 +1332,14 @@ chat_account_provider() {
   case "$1" in cc|claude) echo claude ;; codex) echo codex ;; esac
 }
 
-# Cada chat nuevo elige su CLI. BK_CHAT_PROVIDER lo elige sin preguntar y fija también su comando.
+# Cada chat nuevo elige su CLI: fija BK_CHAT_PROVIDER y el comando que abre (WS_CHAT_CMD). BK_CHAT_PROVIDER lo
+# elige sin preguntar; un WS_CHAT_CMD que ya trae quien llama (retomar una sesión) se conserva.
 choose_chat_provider() {
-  local choice
+  local choice c
   if [ -n "${BK_CHAT_PROVIDER:-}" ]; then
-    set_chat_provider "$BK_CHAT_PROVIDER" && return 0
-    printf 'bk: BK_CHAT_PROVIDER=%s no es un proveedor del chat (agy, codex, cc o cursor)\n' "$BK_CHAT_PROVIDER" >&2
-    return 1
+    c=$(chat_provider_cmd "$BK_CHAT_PROVIDER") || { bad_chat_provider "$BK_CHAT_PROVIDER"; return 1; }
+    [ "$BK_CHAT_PROVIDER" != claude ] || BK_CHAT_PROVIDER=cc
+    WS_CHAT_CMD="${WS_CHAT_CMD:-$c}"; return 0
   fi
   # Los scripts y el modo dry-run no tienen una persona que pueda responder el menú.
   if [ "$DRY" -eq 1 ] || [ ! -t 0 ]; then
@@ -1347,10 +1348,8 @@ choose_chat_provider() {
   while :; do
     printf 'Proveedor del chat nuevo: [1] agy  [2] codex  [3] cc  [4] cursor: ' >/dev/tty
     IFS= read -r choice </dev/tty || return 1
-    case "$choice" in
-      1) choice=agy ;; 2) choice=codex ;; 3) choice=cc ;; 4) choice=cursor ;;
-    esac
-    set_chat_provider "$choice" && return 0
+    case "$choice" in 1) choice=agy ;; 2) choice=codex ;; 3|claude) choice=cc ;; 4) choice=cursor ;; esac
+    if c=$(chat_provider_cmd "$choice"); then BK_CHAT_PROVIDER="$choice"; WS_CHAT_CMD="$c"; return 0; fi
     printf 'Elegí 1, 2, 3 o 4.\n' >/dev/tty
   done
 }

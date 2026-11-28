@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2319,SC2164  # "<condición>; tap_check $?" es el patrón de los tests (tap.sh); si cd falla, la trampa ERR de tap.sh corta la corrida
 # El proveedor del chat en tmux: BK_CHAT_PROVIDER fija el comando que abre (#48) y `bk chat --suelto` abre el
 # proveedor elegido con su cuenta, no claude fijo (#47). Con un tmux falso que solo anota lo que le piden: no abre
 # nada en tu tmux. Las cuentas viven en una carpeta temporal (XDG_STATE_HOME).
