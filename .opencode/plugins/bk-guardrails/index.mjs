@@ -24,14 +24,15 @@ function resolveScriptsDir(options, ctx) {
 function scriptPath(scriptsDir, rel) { return path.join(scriptsDir, rel); }
 function exists(p) { try { return !!p && fs.existsSync(p); } catch { return false; } }
 
-function runPython(script, input, env) {
+function runPython(script, input, env, args = []) {
   if (!exists(script)) return { skipped: true, status: 0, stdout: '', stderr: '' };
   try {
-    const r = spawnSync('python3', [script], {
+    const r = spawnSync('python3', [script, ...args], {
       input: typeof input === 'string' ? input : JSON.stringify(input ?? {}),
       encoding: 'utf8',
       env: env || process.env,
       maxBuffer: 2 * 1024 * 1024,
+      timeout: 15000,
     });
     return { skipped: false, status: r.status ?? 1, stdout: r.stdout || '', stderr: r.stderr || '', error: r.error };
   } catch (error) {
@@ -46,9 +47,11 @@ function parseDenyResult(res) {
   if (stdout) {
     try {
       const obj = JSON.parse(stdout);
-      const decision = asString(obj.permissionDecision || obj.permission || obj.decision || obj.effect).toLowerCase();
+      // Claude Code (y lib/land.py) anidan la decisión en hookSpecificOutput.
+      const o = { ...obj, ...asObj(obj.hookSpecificOutput) };
+      const decision = asString(o.permissionDecision || o.permission || o.decision || o.effect).toLowerCase();
       if (decision === 'deny' || decision === 'block' || decision === 'rejected') {
-        const msg = asString(obj.agent_message || obj.permissionDecisionReason || obj.user_message || obj.message || obj.reason).trim();
+        const msg = asString(o.agent_message || o.permissionDecisionReason || o.user_message || o.message || o.reason).trim();
         return msg || stderr || 'Blocked by BK guardrails';
       }
     } catch {
@@ -56,6 +59,18 @@ function parseDenyResult(res) {
     }
   }
   if (res.status === 2) return stderr || stdout || 'Blocked by BK guardrails';
+  return null;
+}
+
+// Un guardrail que no pudo correr (no arrancó, se colgó o salió con un estado que no es 0 ni 2) no permite nada:
+// devuelve el motivo para frenar, en vez de dejar pasar en silencio.
+function guardFailure(res, name) {
+  if (!res) return null;
+  if (res.skipped) return `BK guardrail no disponible: falta ${name}; se frena el comando por seguridad.`;
+  if (res.error || (res.status !== 0 && res.status !== 2)) {
+    const why = asString(res.error?.message) || asString(res.stderr).trim().split('\n').pop() || `estado ${res.status}`;
+    return `BK guardrail falló al evaluar el comando (${name}: ${why}); se frena por seguridad.`;
+  }
   return null;
 }
 
@@ -110,8 +125,8 @@ function guardrailsPayload(command, cwd) {
   return { tool_name: 'Bash', tool_input: { command: cmd }, command: cmd, cwd: dir };
 }
 
-function landPayload(eventName, filePath) {
-  return { hook_event_name: eventName, tool_name: 'Edit', tool_input: { file_path: filePath } };
+function landPayload(eventName, filePath, cwd) {
+  return { hook_event_name: eventName, tool_name: 'Edit', tool_input: { file_path: filePath }, cwd: asString(cwd) || process.cwd() };
 }
 
 function logDebug(enabled, ...args) {
@@ -141,8 +156,20 @@ export default {
       const cmd = asString(command);
       if (!cmd) return null;
       const res = runPython(guardrailsPy, guardrailsPayload(cmd, cwd), env);
-      return parseDenyResult(res);
+      return parseDenyResult(res) || guardFailure(res, 'guardrails.py');
     };
+
+    // lib/land.py hook (mismo hook que en Claude Code): un deny frena la edición.
+    const evalEdit = (eventName, filePath, cwd) => {
+      if (!filePath || !exists(landPy)) return null;
+      const res = runPython(landPy, landPayload(eventName, filePath, cwd), env, ['hook']);
+      if (eventName !== 'PreToolUse') return null;
+      return parseDenyResult(res) || guardFailure(res, 'lib/land.py');
+    };
+
+    if (!exists(guardrailsPy)) {
+      console.error(`[bk-opencode] falta ${guardrailsPy}: los comandos de shell se frenan hasta que exista.`);
+    }
 
     if (ctx?.permission?.hook) {
       try {
@@ -180,7 +207,8 @@ export default {
           }
           if (tool === 'edit' || tool === 'write') {
             const fp = normalizePath(fileFromToolEvent(event), ctx?.location?.directory || process.cwd());
-            if (fp && exists(landPy)) runPython(landPy, landPayload('PreToolUse', fp), env);
+            const msg = evalEdit('PreToolUse', fp, ctx?.location?.directory);
+            if (msg) throw deny(msg);
           }
         });
       } catch (err) { logDebug(debug, 'tool.execute.before register error', err); }
@@ -192,7 +220,7 @@ export default {
             const status = asString(event?.status);
             if ((tool === 'edit' || tool === 'write') && status === 'completed') {
               const fp = normalizePath(fileFromToolEvent(event), ctx?.location?.directory || process.cwd());
-              if (fp && exists(landPy)) runPython(landPy, landPayload('PostToolUse', fp), env);
+              evalEdit('PostToolUse', fp, ctx?.location?.directory);
             }
             if (tool === 'shell' && status === 'completed') {
               emitTask(taskPayloadForShell(commandFromToolEvent(event), event?.result));
