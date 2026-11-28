@@ -58,6 +58,7 @@ st all "$(con "$M" '{"transport":"app-server"}')" "$P"; [ "$out" = unknown ]; ta
 # 4. Identidad que no se puede acreditar.
 st all "$(con "$M" '{"pid":null}')" "$P"; [ "$out" = unknown ]; tap_check $? "marca sin PID (Codex: PID unknown): unknown" "$out"
 st all "$(con "$M" '{"pid":"4242"}')" "$P"; [ "$out" = unknown ]; tap_check $? "PID que no es entero: unknown" "$out"
+st all "$(con "$M" '{"pid":4242.0}')" "$P"; [ "$out" = unknown ]; tap_check $? "PID decimal: unknown" "$out"
 st all "$(con "$M" '{"pid":1}')" "$P"; [ "$out" = unknown ]; tap_check $? "PID 1 (launchd): unknown" "$out"
 st all "$(con "$M" '{"process_start":null}')" "$P"; [ "$out" = unknown ]; tap_check $? "marca sin hora de inicio: unknown" "$out"
 st all "$(con "$M" '{"parent_thread_id":"t-0"}')" "$P"; [ "$out" = unknown ]; tap_check $? "subagente (comparte session_id con el padre): unknown" "$out"
