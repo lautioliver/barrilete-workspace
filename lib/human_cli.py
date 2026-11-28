@@ -83,6 +83,7 @@ def main(argv):
         print(f"bk {argv[1]}: {blocked}; ejecutalo desde una terminal humana separada, fuera del chat del agente.",
               file=sys.stderr)
         return 1
+    # #57: la persona confirma por el mecanismo del sistema, antes del efecto. Denegar es el caso seguro.
     return 0
 
 

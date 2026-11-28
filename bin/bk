@@ -710,7 +710,10 @@ cmd_approve() {
   repo=$(jq -r '.repo // empty' <<<"$t")
   [ -d "$repo" ] || die "no sé en qué repo lanzar $id"
   case "$(jq -r .role <<<"$t")" in
-    reviewer) local pr; pr=$(jq -r '.pr // empty' <<<"$t"); cd "$repo" && cmd_review "$pr" ;;
+    reviewer) local pr; pr=$(jq -r '.pr // empty' <<<"$t")
+      # #57: la persona confirma la tarea real que se va a lanzar, antes de lanzarla
+      confirmar_humano "bk approve" "$id"
+      cd "$repo" && cmd_review "$pr" ;;
     *) die "bk approve lanza reviewers propuestos; $id es de otro rol" ;;
   esac
 }
@@ -827,6 +830,11 @@ bitacora() {
   info "→ $tp: $msg"
 }
 
+# #57: confirmación de una persona por el mecanismo del sistema; si no es ok, no se ejecuta nada.
+confirmar_humano() {
+  python3 "$WS/lib/human_confirm.py" "$1" "$2" || die "confirmación denegada: no se ejecuta"
+}
+
 say() {
   need_backend
   local now=0; [ "${1:-}" = "--now" ] && { now=1; shift; }
@@ -841,6 +849,8 @@ say() {
   [ -n "$msg" ] || die "falta el mensaje"
   local tp; tp=$(win_pane "$win")
   [ -n "$tp" ] || die "no encuentro dónde corre ${win#chat:}"
+  # #57: la persona confirma el destino resuelto antes de encolar o escribir. El mensaje no va al diálogo.
+  confirmar_humano "bk say" "$win"
   # Trabajando (ADR-005 D8): se encola y el hook lo escribe cuando el agente termina el turno
   case "$win" in chat:*) ;; *)
     local td; td=$(python3 "$TASKS" find --window "$win" 2>/dev/null || true)
@@ -1964,7 +1974,7 @@ case "${1:-}" in
   ls)          shift; ls_agents "${1:-}" ;;
   go)          shift; go "${1:-}" ;;
   peek)        shift; peek "${1:-}" "${2:-}" ;;
-  say)         shift; python3 "$WS/lib/human_cli.py" say; say "$@" ;;
+  say)         shift; python3 "$WS/lib/human_cli.py" say || exit 1; say "$@" ;;
   watch)       shift; watch "${1:-}" ;;
   stop)        shift; stop "${1:-}" ;;
   clean)       shift; exec python3 "$WS/lib/clean.py" "$@" ;;
@@ -1973,7 +1983,7 @@ case "${1:-}" in
                exit $rc ;;
   tasks)       shift; case "${1:-}" in prune) shift; exec python3 "$TASKS" prune "$@" ;;
                                      *) exec python3 "$TASKS" list "$@" ;; esac ;;
-  approve)     shift; python3 "$WS/lib/human_cli.py" approve; cmd_approve "${1:-}" ;;
+  approve)     shift; python3 "$WS/lib/human_cli.py" approve || exit 1; cmd_approve "${1:-}" ;;
   checkpoints|ckpt) shift; exec python3 "$WS/lib/checkpoints.py" "$@" ;;
   _ended)      python3 "$TASKS" ended "${2:?}" || true ;;
   _prs)        cmd_prs ;;
@@ -2004,7 +2014,6 @@ case "${1:-}" in
   routing)     shift; [ "$DRY" -eq 0 ] || set -- "$@" --dry-run
                exec python3 "$WS/lib/routing_feedback.py" "$@" ;;
   supervisor)  shift; [ "$DRY" -eq 0 ] || set -- "$@" --dry-run
-               if [ "$DRY" -eq 0 ]; then case "${1:-}" in approve|cancel) python3 "$WS/lib/human_cli.py" "$1" ;; esac; fi
                exec python3 "$WS/lib/supervisor.py" "$@" ;;
   lessons)     lessons ;;
   bitacora)    shift; bitacora "$@" ;;
