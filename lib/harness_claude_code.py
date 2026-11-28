@@ -1,4 +1,4 @@
-"""Claude Code adapter for the supervisor (ADR-003, draft contract of PR #55 at 08a7856).
+"""Claude Code adapter for the supervisor (ADR-003, contract merged in #55, 0364135).
 
 Reads the session marks that Claude Code hooks write to
 ${XDG_STATE_HOME:-~/.local/state}/bk/supervisor/sessions/claude-code-<session_id>.json and never writes them.

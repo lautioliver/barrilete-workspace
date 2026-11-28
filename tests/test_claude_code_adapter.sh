@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Adaptador de Claude Code del supervisor (ADR-003, contrato borrador del PR #55, 08a7856):
+# Adaptador de Claude Code del supervisor (ADR-003, contrato integrado en #55, 0364135):
 # lee las marcas de sesión de sessions/claude-code-<session_id>.json y nunca escribe.
 # Todo va a un XDG_STATE_HOME temporal; los procesos de las marcas son `sleep` propios del test.
 # No registra el adaptador en HARNESS_ADAPTERS de lib/supervisor.py (eso queda para la aprobación):
