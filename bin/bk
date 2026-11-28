@@ -53,7 +53,8 @@ uso: bk [comando] [--dry-run]
   new | n           popup "Nuevo": chat nuevo en este proyecto u otro workspace (alt+n, o + en la tira)
                     Con Herdr, alt+n abre el panel Nuevo: chat, en una rama, con nombre, suelto, una terminal,
                     otro proyecto, seguir desde un resumen o (parado en un chat) pedir su resumen y seguir (alt+h)
-  chat [--suelto]   un claude nuevo en el proyecto del workspace (o sin proyecto), en el lugar del chat (alt+q vuelve)
+  chat [--suelto]   un chat nuevo en el proyecto del workspace (o sin proyecto), en el lugar del chat (alt+q vuelve);
+                    pregunta el proveedor (agy, codex, cc o cursor) y BK_CHAT_PROVIDER=<proveedor> lo elige sin preguntar
   chat --nombre X   el chat nuevo se llama X (bk ls, bk say X "…", bk go X); también con --rama
   chat --carpeta D  un chat en esa carpeta (el worktree de una rama: Enter en alt+b), en su propio espacio
   chat --desde N    seguir en un chat nuevo desde el resumen del workspace N (misma carpeta y cuenta; alt+n también)
@@ -1001,15 +1002,13 @@ workspace() {
     # El chat sobrevive a un /exit: vuelve a una shell en la misma carpeta
     # La cuenta de donde se abre (bk account use, o BK_ACCOUNT=x bk) pasa a la sesión nueva; new-session -e
     # también la deja en el entorno de la sesión, como bk account use
-    local CTA cx chat_provider="${WS_CHAT_PROVIDER:-${BK_CHAT_PROVIDER:-cc}}" account_provider
-    [ "$chat_provider" = claude ] && chat_provider=cc
-    case "$chat_provider" in
-      cc) account_provider=claude; account_args claude ;;
-      codex) account_provider=codex; account_args codex ;;
-      *) account_provider=""; CTA=() ;;
-    esac
+    # El proveedor (BK_CHAT_PROVIDER, o el de un resumen) da el comando, si quien llama no trae uno, y la cuenta
+    local CTA=() cx account_provider wprov="${WS_CHAT_PROVIDER:-${BK_CHAT_PROVIDER:-cc}}" wcmd="${WS_CHAT_CMD:-}"
+    if [ -z "$wcmd" ]; then wcmd=$(chat_provider_cmd "$wprov") || { bad_chat_provider "$wprov"; exit 1; }; fi
+    account_provider=$(chat_account_provider "$wprov")
+    [ -z "$account_provider" ] || account_args "$account_provider"
     chat=$(tmux new-session -d -P -F '#{pane_id}' -s "$WS_SESSION" -n main -c "$dir" -x "$cols" -y "$lines" \
-           -e "BK_PROJECT=$top" "${CTA[@]+"${CTA[@]}"}" "${WS_CHAT_CMD:-claude}; exec \$SHELL")
+           -e "BK_PROJECT=$top" "${CTA[@]+"${CTA[@]}"}" "$wcmd; exec \$SHELL")
     [ -z "$account_provider" ] || [ -z "$(account_of "$account_provider")" ] || tmux set-option -t "$WS_SESSION" "@bk_account_$account_provider" "$(account_of "$account_provider")"
     [ -z "$cx" ] || { BK_FROM="$WS_SESSION" account_use "$cx" >/dev/null; }
     tmux set-environment -t "$WS_SESSION" BK_PROJECT "$top"
@@ -1128,7 +1127,7 @@ ws_agent() {
   tmux display-message "agente $n en el lugar del chat · alt+q vuelve al orquestador"
 }
 
-# bk chat [sesión]: un claude nuevo en la carpeta del proyecto del workspace. Vive en la sesión
+# bk chat [sesión]: un chat nuevo (el proveedor elegido) en la carpeta del proyecto del workspace. Vive en la sesión
 # "agents" (aparece en la tira) y se trae al lugar del chat; alt+q vuelve al orquestador.
 # bk name "<nombre>": cómo se llama el chat de este workspace (bk ls, la tira, bk say/go <nombre>).
 # Sin nombre: lo muestra. bk name -: lo borra (vuelve al de /rename o al título de Claude).
@@ -1317,24 +1316,41 @@ chat_branch_wt() {
   CHAT_SLUG="$slug"; CHAT_WT="$wt"
 }
 
-# Cada chat nuevo elige su CLI; los nombres son una lista cerrada para no evaluar texto ingresado.
+# chat_provider_cmd <nombre>: el comando que abre cada proveedor del chat. Lista cerrada, para no evaluar texto
+# ingresado; otro nombre falla.
+chat_provider_cmd() {
+  case "$1" in agy) echo agy ;; codex) echo codex ;; cc|claude) echo claude ;; cursor) echo cursor-agent ;; *) return 1 ;; esac
+}
+
+bad_chat_provider() {
+  printf 'bk: BK_CHAT_PROVIDER=%s no es un proveedor del chat (agy, codex, cc o cursor)\n' "$1" >&2
+}
+
+# chat_account_provider <proveedor del chat>: de qué proveedor es la cuenta que se le pasa (bk account); agy y
+# cursor no tienen cuentas de bk.
+chat_account_provider() {
+  case "$1" in cc|claude) echo claude ;; codex) echo codex ;; esac
+}
+
+# Cada chat nuevo elige su CLI: fija BK_CHAT_PROVIDER y el comando que abre (WS_CHAT_CMD). BK_CHAT_PROVIDER lo
+# elige sin preguntar; un WS_CHAT_CMD que ya trae quien llama (retomar una sesión) se conserva.
 choose_chat_provider() {
-  local choice
-  [ -n "${BK_CHAT_PROVIDER:-}" ] && return 0
+  local choice c
+  if [ -n "${BK_CHAT_PROVIDER:-}" ]; then
+    c=$(chat_provider_cmd "$BK_CHAT_PROVIDER") || { bad_chat_provider "$BK_CHAT_PROVIDER"; return 1; }
+    [ "$BK_CHAT_PROVIDER" != claude ] || BK_CHAT_PROVIDER=cc
+    WS_CHAT_CMD="${WS_CHAT_CMD:-$c}"; return 0
+  fi
   # Los scripts y el modo dry-run no tienen una persona que pueda responder el menú.
   if [ "$DRY" -eq 1 ] || [ ! -t 0 ]; then
-    BK_CHAT_PROVIDER="${BK_CHAT_PROVIDER:-cc}"; WS_CHAT_CMD="${WS_CHAT_CMD:-claude}"; return 0
+    BK_CHAT_PROVIDER=cc; WS_CHAT_CMD="${WS_CHAT_CMD:-claude}"; return 0
   fi
   while :; do
     printf 'Proveedor del chat nuevo: [1] agy  [2] codex  [3] cc  [4] cursor: ' >/dev/tty
     IFS= read -r choice </dev/tty || return 1
-    case "$choice" in
-      1|agy) BK_CHAT_PROVIDER=agy; WS_CHAT_CMD=agy; return 0 ;;
-      2|codex) BK_CHAT_PROVIDER=codex; WS_CHAT_CMD=codex; return 0 ;;
-      3|cc) BK_CHAT_PROVIDER=cc; WS_CHAT_CMD=claude; return 0 ;;
-      4|cursor) BK_CHAT_PROVIDER=cursor; WS_CHAT_CMD=cursor-agent; return 0 ;;
-      *) printf 'Elegí 1, 2, 3 o 4.\n' >/dev/tty ;;
-    esac
+    case "$choice" in 1) choice=agy ;; 2) choice=codex ;; 3|claude) choice=cc ;; 4) choice=cursor ;; esac
+    if c=$(chat_provider_cmd "$choice"); then BK_CHAT_PROVIDER="$choice"; WS_CHAT_CMD="$c"; return 0; fi
+    printf 'Elegí 1, 2, 3 o 4.\n' >/dev/tty
   done
 }
 
@@ -1386,11 +1402,13 @@ cmd_chat() {
   fi
   n=1; while has_window "$name$([ $n -gt 1 ] && echo "-$n")"; do n=$((n + 1)); done
   [ $n -gt 1 ] && name="$name-$n"
-  local CTA kv; account_args claude
+  # El proveedor elegido (choose_chat_provider), con la cuenta de ese proveedor
+  local CTA=() kv acp; acp=$(chat_account_provider "$BK_CHAT_PROVIDER")
+  [ -z "$acp" ] || account_args "$acp"
   if tmux has-session -t "$SESSION" 2>/dev/null; then
-    pane=$(tmux new-window -d -P -F '#{pane_id}' -t "$SESSION:" -n "$name" -c "$top" "${CTA[@]+"${CTA[@]}"}" "claude")
+    pane=$(tmux new-window -d -P -F '#{pane_id}' -t "$SESSION:" -n "$name" -c "$top" "${CTA[@]+"${CTA[@]}"}" "$WS_CHAT_CMD")
   else
-    pane=$(tmux new-session -d -P -F '#{pane_id}' -s "$SESSION" -n "$name" -c "$top" "${CTA[@]+"${CTA[@]}"}" "claude")
+    pane=$(tmux new-session -d -P -F '#{pane_id}' -s "$SESSION" -n "$name" -c "$top" "${CTA[@]+"${CTA[@]}"}" "$WS_CHAT_CMD")
     # Como en launch: que la cuenta de este chat no quede en el entorno de la sesión de agentes
     for kv in "${CTA[@]+"${CTA[@]}"}"; do [ "$kv" = -e ] || tmux set-environment -u -t "$SESSION" "${kv%%=*}" 2>/dev/null || true; done
   fi
