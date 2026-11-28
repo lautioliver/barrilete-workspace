@@ -39,6 +39,10 @@
       "gh release create": "deny",
       "gh pr merge *": "deny",
       "gh pr merge": "deny",
+      "bk say *": "deny",
+      "bk say": "deny",
+      "bk approve *": "deny",
+      "bk approve": "deny",
       "* --no-verify*": "deny",
       "* --no-verify": "deny",
       "git *--no-verify*": "deny"
