@@ -62,7 +62,55 @@ pending, queued o reserved --cancelación antes del inicio--> cancelled
 - Los hitos persistidos usan códigos cerrados (`lease_started`, `lease_stale`, `lease_recovered`, `lease_completed`, `lease_released`) sin heartbeat por evento ni texto libre. El estado terminal y los hitos se purgan a los 30 días; leases activos o `stale` no vencen por retención.
 - `pending`, `queued` y `reserved` pueden cancelarse antes del inicio. No se ofrece `force release` mientras no exista una verificación confiable del adaptador. El cierre de tarea informado por `bk done` no prueba por sí solo que el proceso haya terminado.
 
-Este contrato sigue propuesto hasta validar cómo cada harness acredita identidad, sesión y subagentes. El código implementa estas transiciones, pero sin un adaptador registrado ninguna pasa de `reserved`; el CLI solo expone `reconcile`.
+Este contrato sigue propuesto hasta validar cómo cada harness acredita identidad, sesión y subagentes (ver *Acreditación por harness*). El código implementa estas transiciones, pero sin un adaptador registrado ninguna pasa de `reserved`; el CLI solo expone `reconcile`.
+
+## Acreditación por harness
+
+Cómo prueba cada harness que una sesión sigue viva o terminó, de dónde salen el PID y la hora de inicio, cómo se ve un subagente y cómo se rechaza un implementador sin lease. Es el contrato de los adaptadores (#38–#40). Evidencia en vivo del 2026-11-28: una corrida headless corta por harness, en una carpeta temporal, con hooks que solo guardaban su entrada y la cadena de procesos (sin modos bypass ni `BK_TASK_DIR`). Lo que no se vio en vivo queda `unknown`, y un harness con algo `unknown` en esta tabla no recibe adaptador hasta verificarlo.
+
+### Reglas comunes
+
+- **Marca de sesión (confirmado por Lautaro en el chat, 2026-11-28).** El hook de inicio de sesión de cada harness escribe una marca en `${XDG_STATE_HOME:-~/.local/state}/bk/supervisor/` con el harness, la sesión, el PID del proceso del agente y su hora de inicio (`ps -o lstart=` con `TZ=UTC`, como `process_state`). El hook de fin de sesión, donde existe, la cierra. El adaptador lee esa marca; no la escribe un agente ni el CLI. Los hooks se implementan en cada adaptador, no en este ADR.
+- **PID del agente.** En los tres harness verificados el hook es hijo directo del proceso del agente: el PID es el `PPID` del hook. Un subagente corre dentro de ese mismo proceso y no tiene PID propio.
+- **Sesión viva o terminada.** Viva: la marca existe, el proceso con ese PID y esa hora de inicio sigue vivo y no hay fin de sesión registrado. Terminada: fin de sesión registrado (si el harness lo tiene) **y** proceso ausente o con otra hora de inicio. Sin evento de fin, solo la ausencia del proceso prueba el fin. Cualquier otra combinación es `unknown` y el lease queda como está (`stale` no libera).
+- **Subagentes (decidido el 2026-11-28).** Un subagente implementador (`implementer`, `implementer-light`) sin lease propio se rechaza con un hook `PreToolUse` sobre la herramienta que lo lanza, antes de que arranque. El lease del subagente usa el PID y la hora de inicio de su proceso padre y su propia sesión (la del subagente, abajo por harness). No hay reserva dinámica de slots: el subagente tiene que estar en el plan aprobado. Un subagente no implementador (lector, `Explore`) no consume slot ni se rechaza.
+
+### Claude Code (2.1.332, verificado en vivo)
+
+| Qué | Evidencia |
+|---|---|
+| Sesión | `session_id` en todos los hooks. `SessionStart` (`source: startup`) y `SessionEnd` (`reason`) existen y se dispararon. |
+| PID y hora de inicio | El `PPID` del hook es el proceso `claude`; la hora sale de `ps -o lstart=`. |
+| Subagente | `PreToolUse` con `tool_name: Agent` y `tool_input.subagent_type` antes de lanzarlo; después `SubagentStart` y `SubagentStop` con `agent_id` y `agent_type`. Los `PreToolUse` del subagente traen `agent_id` y `agent_type`; los del padre no. El subagente comparte PID con la sesión. |
+| Sesión del subagente | `<session_id>:<agent_id>` (cabe en `SESSION_ID`). Fin: `SubagentStop`. Ojo: en `SubagentStop`, `background_tasks` todavía lo lista como `running`; el fin se toma del evento, no de ese campo. |
+| Rechazo sin lease | `PreToolUse` con matcher `Agent`: si `subagent_type` es `implementer` o `implementer-light` y no hay un lease `reserved` para esa sesión, devuelve `deny`. |
+| Modelo | No viene en el payload del hook: sale del transcript (`transcript_path`, como `hooks/agent_state.sh`) o queda `unknown`. |
+
+### Codex (codex-cli 0.170.0, verificado en parte)
+
+| Qué | Evidencia |
+|---|---|
+| Hooks | El binario declara `SessionStart`, `SessionEnd`, `SubagentStart`, `SubagentStop`, `PreToolUse`, `PostToolUse`, `PermissionRequest`, `PreCompact`, `PostCompact`, `Interrupt` y `PreModelRequest`. Un hook corre solo si su ruta y su hash están aprobados en `~/.codex/config.toml` (`[hooks.state."<ruta>:<evento>:0:0"] trusted_hash`); si no, Codex avisa que "needs review" y no lo corre. En la corrida de prueba ningún hook corrió por eso. |
+| Sesión | `session_meta.session_id` en el rollout (`~/.codex/sessions/…`). En el payload de los hooks: `unknown` (no se vio en vivo). |
+| PID y hora de inicio | `unknown`: no se vio el `PPID` de un hook, y hay sesiones servidas por `codex app-server` (un daemon compartido), donde el PID no identifica una sesión. |
+| Subagente | En la corrida en vivo, `spawn_agent` y `wait_agent` (namespace `collaboration`); el shell corre con la herramienta `exec` (code mode), no `Bash`. Payload de `SubagentStart`/`SubagentStop`: `unknown`. |
+| Rechazo sin lease | `PreToolUse` sobre `spawn_agent`: `unknown` hasta ver su payload con hooks aprobados. |
+
+Codex no recibe adaptador hasta verificar, con hooks aprobados, el payload de sesión y de subagente y el PID en sesiones de terminal y de `app-server`. La aprobación por ruta afecta también a las barandas: un worktree (`barrilete-workspace-wt/*`) tiene otra ruta de `.codex/hooks.json`, sin aprobar, y el matcher `Bash` no cubre `exec`. Eso se valida en #37.
+
+### Agy (1.5.18, verificado en vivo)
+
+| Qué | Evidencia |
+|---|---|
+| Hooks | `<workspace>/.agents/hooks.json` (o `~/.gemini/config/hooks.json`): un nombre por grupo y, adentro, eventos. `SessionStart`, `PreInvocation`, `PostInvocation` y `Stop` son listas de comandos; `PreToolUse` y `PostToolUse` llevan `matcher` y `hooks`. Se dispararon los seis. No hay evento de fin de sesión: `Stop` es por turno (`terminationReason`, `fullyIdle`). |
+| Sesión | `conversationId` en todos los hooks; `modelName` también (se vio `gemini-4-carbon-medium`). |
+| PID y hora de inicio | El `PPID` del hook es el proceso `agy`, también para los hooks del subagente. |
+| Subagente | El padre llama a `invoke_subagent` (`Prompt`, `Role`, `TypeName`); el subagente arranca con su propio `SessionStart` y otro `conversationId`, en el mismo proceso, y responde con `send_message` cuyo `Recipient` es la conversación del padre. Su `SessionStart` no trae el id del padre. |
+| Sesión del subagente | Su `conversationId`. Fin: `unknown` (no hay evento de fin); se toma como terminado solo cuando el proceso `agy` ya no está. |
+| Rechazo sin lease | `PreToolUse` con matcher `invoke_subagent`: si `Role`/`TypeName` es implementador y no hay lease, rechaza. La forma de la respuesta que niega (`{"decision": "deny"}`) es `unknown`: se vio `{"decision": "ask"}` en un hook instalado, no un `deny` probado. |
+| Modo | `--mode auto` no está disponible para esta cuenta; la prueba corrió en el modo por defecto. |
+
+Sin evento de fin de sesión, un `agy` interactivo vivo mantiene su lease aunque la conversación haya terminado: se libera al cerrar el proceso, o con intervención humana.
 
 ## Propuesta concreta para revisión (no aceptada)
 
@@ -77,13 +125,15 @@ Los valores de heartbeat, stale y retención fueron confirmados por Lautaro en e
 ## Preguntas abiertas
 
 - ¿Quién acepta y coordina las enmiendas de ADR-004/005 en el kit? Este repo solo propone el cambio; no reemplaza los ADR aceptados ni autoriza cambios al kit.
-- ¿Qué prueba en vivo acredita Codex y qué versiones de Agy/Hydrogen/SerHigh-Q se consideran IDs exactos del catálogo?
+- Codex: payload de sesión y de subagente en los hooks, y PID en sesiones de `app-server` (ver *Acreditación por harness*). ¿Qué versiones de Agy/Hydrogen/SerHigh-Q se consideran IDs exactos del catálogo?
+- Agy: ¿cómo responde un hook `PreToolUse` que niega?
 
 ## Decisiones confirmadas en el chat
 
 - 2026-11-27: `bk say` y `bk approve` se ejecutan desde una terminal humana separada, fuera del chat o sesión del agente. El flujo `! bk say` dentro del chat deja de usarse.
 - 2026-11-27: heartbeat cada 60 segundos; lease `stale` tras 5 minutos sin señal, sin liberación automática; estados terminales e hitos del bus con retención de 30 días.
 - 2026-11-28: un lease `stale` vuelve a `running` con un heartbeat de la misma identidad (PID, hora de inicio y sesión) si el adaptador confirma el proceso y la sesión vivos; deja un hito `lease_recovered`. Cualquier otra cosa lo mantiene `stale`.
+- 2026-11-28: la sesión se acredita con una marca que escriben los hooks de inicio y fin de sesión de cada harness (ver *Acreditación por harness*); un subagente implementador sin lease propio se rechaza con un hook, sin reserva dinámica de slots.
 - El límite global de tres implementadores y una review activa por PR ya estaba acordado en el handoff.
 
 ## Consecuencias
