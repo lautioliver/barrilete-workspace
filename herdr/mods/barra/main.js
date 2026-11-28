@@ -45,7 +45,7 @@ export default class Barra extends View {
     this.cwd = null;
     this.at = 0;
     this.busy = false;
-    this.tried = new Set();
+    this.adoptAttempts = new Map();
     this.adopting = false;
     const load = async (cx) => {
       const dir = focused()?.cwd || home();
@@ -110,16 +110,25 @@ export default class Barra extends View {
   async adopt() {
     if (this.adopting) return;
     const all = terminals();
-    const need = agents().map((a) => a.address).filter((addr) => {
-      if (this.tried.has(addr)) return false;   // las de otra máquina (omarchy/t28) también: hd_adopt sabe con ellas
+    const candidates = new Set(agents().map((a) => a.address));
+    for (const t of all) {
+      if (t.state === "live" && (t.agent === "cursor-agent" || t.status?.app === "cursor-agent" || /^Cursor Agent\b/.test(t.title ?? ""))) {
+        candidates.add(t.address);
+      }
+    }
+    const need = [...candidates].filter((addr) => {
+      if ((this.adoptAttempts.get(addr) ?? 0) >= 40) return false; // deja tiempo a que Herdr detecte el proceso
       const t = all.find((x) => x.address === addr);
       return t && t.state === "live" && !t.labels?.["bk.id"];
     });
     if (!need.length) return;
     this.adopting = true;
     for (const addr of need) {
-      this.tried.add(addr);
-      try { await exec(bin(), ["_adopt", addr], { cwd: home(), timeout: 15000 }); } catch (_e) { /* la próxima terminal */ }
+      this.adoptAttempts.set(addr, (this.adoptAttempts.get(addr) ?? 0) + 1);
+      try {
+        const r = await exec(bin(), ["_adopt", addr], { cwd: home(), timeout: 15000 });
+        if (r.code === 0 && String(r.stdout ?? "").trim()) this.adoptAttempts.set(addr, 40);
+      } catch (_e) { /* se reintenta mientras la terminal siga viva */ }
     }
     this.adopting = false;
   }

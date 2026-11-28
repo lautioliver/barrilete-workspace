@@ -434,16 +434,17 @@ hd_id_give() {
 # Vale también para el agente de otra máquina de Herdr (omarchy/t28): las etiquetas y los números se reparten
 # acá, así no se repiten entre máquinas.
 hd_adopt() {
-  local t="$1" j kind dir top name ws app argv
+  local t="$1" j kind dir top name ws app argv title
   j=$(hd_hc get "$t" --json 2>/dev/null) || return 1
   [ "$(jq -r '.state // ""' <<<"$j" 2>/dev/null)" = live ] || return 0
   kind=$(jq -r '.labels["bk.kind"] // ""' <<<"$j" 2>/dev/null)
+  title=$(jq -r '.title // ""' <<<"$j" 2>/dev/null)
   case "$kind" in
     agent) ;;
     chat)
       argv=$(jq -r '[.foreground.argv[]?] | join(" ")' <<<"$j")
-      case "$argv" in
-        *cursor-agent/versions/*|*cursor-agent\ --*)
+      case "$argv $title" in
+        *cursor-agent/versions/*|*cursor-agent\ --*|*"Cursor Agent"*)
           dir=$(jq -r '.foreground.cwd // .cwd // ""' <<<"$j"); top=$(project_top "$dir"); name=$(project_of "$top")
           ws="cursor-$(hd_label "$t" bk.id)"
           hd_hc label "$t" bk.kind=agent "bk.win=$ws" "bk.project=$name" bk.role=cursor bk.adopted=1 >/dev/null 2>&1 || return 1 ;;
@@ -452,8 +453,8 @@ hd_adopt() {
       [ -n "$(jq -r '.labels["herdr.tab"] // ""' <<<"$j")" ] || return 0
       app=$(jq -r '.status.app // ""' <<<"$j")
       argv=$(jq -r '[.foreground.argv[]?] | join(" ")' <<<"$j")
-      case "$app $argv" in
-        *cursor-agent/versions/*|*cursor-agent\ --*) app=cursor-agent ;;
+      case "$app $argv $title" in
+        *cursor-agent/versions/*|*cursor-agent\ --*|*"Cursor Agent"*) app=cursor-agent ;;
       esac
       [ -n "$app" ] || return 0
       dir=$(jq -r '.foreground.cwd // .cwd // ""' <<<"$j")   # la de claude, no la de la shell (pudo hacer cd)
