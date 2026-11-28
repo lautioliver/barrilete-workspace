@@ -259,6 +259,14 @@ OUT=$(python3 "$ROOT/lib/supervisor.py" status)
 check_has "$OUT" '"verified_harnesses": []' "status: sin adaptadores reales registrados"
 check_has "$OUT" '"stale_after_seconds": 300' "status muestra el umbral de stale"
 check_has "$(python3 "$ROOT/lib/supervisor.py" reconcile --dry-run)" '"dry_run": true' "el CLI expone reconcile --dry-run"
+# bk supervisor sin subcomando: el uso del supervisor, no un "unbound variable" de bin/bk (set -u).
+bkr() { HOME="$TMP/home" "$ROOT/bin/bk" "$@"; }
+mkdir -p "$TMP/home"
+OUT=$(bkr supervisor 2>&1); RC=$?
+check_eq "$RC" 2 "bk supervisor sin subcomando sale con el código de uso"
+check_has "$OUT" "uso: bk supervisor" "bk supervisor sin subcomando muestra el uso"
+case "$OUT" in *"unbound variable"*) R=hay ;; *) R=no ;; esac
+check_eq "$R" no "bk supervisor sin subcomando no corta por set -u"
 check_eq "$(stat -f %Lp "$STORE" 2>/dev/null || stat -c %a "$STORE")" 700 "el store es privado"
 
 echo "1..$N"

@@ -4,10 +4,13 @@
 # El estado va a un XDG_STATE_HOME temporal, el adaptador de harness es falso y los procesos son `sleep` propios.
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(dirname "$HERE")"
+# shellcheck disable=SC1091  # tap.sh se carga en tiempo de ejecución
 . "$ROOT/scripts/agents/tap.sh"
 tap_begin "tests/test_supervisor_events.sh"
 TMP=$(mktemp -d); TMP=$(cd "$TMP" && pwd -P)
 PIDS=""
+out=""                                  # lo asigna tap_run
+# shellcheck disable=SC2016  # se expande al salir, no ahora
 tap_at_exit 'for p in $PIDS; do kill "$p" 2>/dev/null; done; rm -rf "$TMP"'
 export PYTHONPYCACHEPREFIX="$TMP/pycache"
 mkdir -p "$TMP/sessions"
@@ -170,5 +173,37 @@ sv events plan.closed
 [ "$out" = 1 ]; tap_check $? "con el cierre guardado queda plan.closed" "plan.closed en el bus: $out"
 sv events plan.reserved
 [ "$out" = 3 ]; tap_check $? "con la promoción guardada queda plan.reserved" "plan.reserved en el bus: $out"
+
+# --- una escritura cortada (sin "\n" final) no bloquea el bus ----------------------------------------------
+# Un corte a mitad de una alta deja la última línea a medias: se descarta, y las altas siguientes no se pegan a ella.
+use_store torn
+EV="$TMP/torn/bk/supervisor/events.jsonl"
+sv propose a 1
+printf '{"v":1,"event_id":"x' >>"$EV"
+sv propose b 2
+[ "$out" = pending ]; tap_check $? "propose con la última línea cortada sigue andando" "got: $out"
+sv approve b
+[ "$out" = reserved ]; tap_check $? "approve con la última línea cortada sigue andando" "got: $out"
+sv events plan.proposed
+[ "$out" = 2 ]; tap_check $? "la línea cortada se descarta y los eventos nuevos quedan" "plan.proposed en el bus: $out"
+printf '{"v":1,"event_id":"x' >>"$EV"
+sv cancel b
+[ "$out" = cancelled ]; tap_check $? "cancel con la última línea cortada sigue andando" "got: $out"
+sv events plan.cancelled
+[ "$out" = 1 ]; tap_check $? "cancel anexa su evento en una línea propia" "plan.cancelled en el bus: $out"
+# start no compacta el bus antes de anexar: la alta tiene que cortar ella misma la línea a medias.
+sv propose d 4; sv approve d
+printf '{"v":1,"event_id":"x' >>"$EV"
+spawn; P=$LAST; printf 'alive\n' >"$TMP/sessions/td"
+sv start d 0 "$P" td
+[ "$out" = running ]; tap_check $? "start con la última línea cortada sigue andando" "got: $out"
+sv events lease.started
+[ "$out" = 1 ]; tap_check $? "start anexa su evento en una línea propia" "lease.started en el bus: $out"
+stop "$P"
+# Una línea inválida que sí termina en "\n" no es un corte: sigue frenando para no perder datos.
+printf 'basura\n' >>"$EV"
+sv propose c 3
+case "$out" in "error: "*"línea inválida"*) r=0 ;; *) r=1 ;; esac
+tap_check $r "una línea inválida completa sigue frenando" "got: $out"
 
 tap_done
