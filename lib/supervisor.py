@@ -416,7 +416,9 @@ def reserve(record):
     record["leases"] = {a["lease_id"]: new_lease() for a in record["plan"]["assignments"]}
 
 
-def promote_queue(state):
+def promote_queue(state, events):
+    """Reserves queued plans that now fit. The plan.reserved events go to `events`: the caller appends them
+    to the bus only after write_state, so the bus never records a promotion the state did not keep."""
     queued = [r for r in state["plans"] if r["status"] == "queued"]
     queued.sort(key=lambda r: (
         0 if any(a["priority"] == "hotfix" for a in r["plan"]["assignments"]) else 1,
@@ -426,7 +428,7 @@ def promote_queue(state):
                      for a in record["plan"]["assignments"])
         if reserved_implementers(state) + needed <= MAX_IMPLEMENTERS:
             reserve(record)
-            append_event_locked("plan.reserved", record["plan"], "queue_promoted")
+            events.append(("plan.reserved", record["plan"], "queue_promoted"))
         else:
             break
 
@@ -550,8 +552,12 @@ def cancel(run_id):
                 lease["ended_at"] = stamp
         write_state(state)
         append_event_locked("plan.cancelled", record["plan"], "cancelled")
-        promote_queue(state)
-        write_state(state)
+        promoted = []
+        promote_queue(state, promoted)
+        if promoted:
+            write_state(state)
+            for event in promoted:
+                append_event_locked(*event)
         return {"run_id": run_id, "status": "cancelled", "cancelled": True}
 
 
@@ -634,7 +640,9 @@ def identity_in_use(state, pid, process_start, session_id, excluding):
     return False
 
 
-def close_finished_plans(state):
+def close_finished_plans(state, events):
+    """Closes reserved plans whose leases all ended, and promotes the queue. Like promote_queue, it
+    collects its events in `events` for the caller to append after write_state."""
     closed = 0
     for record in state["plans"]:
         if record["status"] != "reserved":
@@ -642,10 +650,10 @@ def close_finished_plans(state):
         if all(lease["status"] in ("completed", "released") for lease in record["leases"].values()):
             record["status"] = "closed"
             record["closed_at"] = iso()
-            append_event_locked("plan.closed", record["plan"], "all_leases_ended")
+            events.append(("plan.closed", record["plan"], "all_leases_ended"))
             closed += 1
     if closed:
-        promote_queue(state)
+        promote_queue(state, events)
     return closed
 
 
@@ -724,8 +732,11 @@ def finish_lease(run_id, lease_id):
         lease["ended_at"] = iso()
         write_state(state)
         append_event_locked("lease.completed", record["plan"], "verified_exit", assignment)
-        if close_finished_plans(state):
+        closing = []
+        if close_finished_plans(state, closing):
             write_state(state)
+            for event in closing:
+                append_event_locked(*event)
     return {"run_id": run_id, "lease_id": lease_id, "status": "completed"}
 
 
@@ -762,8 +773,11 @@ def reconcile(dry_run=False):
             write_state(state)
             for event in events:
                 append_event_locked(*event)
-            if close_finished_plans(state):
+            closing = []
+            if close_finished_plans(state, closing):
                 write_state(state)
+                for event in closing:
+                    append_event_locked(*event)
     return {"stale": stale, "released": released, "needs_human": held, "dry_run": dry_run}
 
 
