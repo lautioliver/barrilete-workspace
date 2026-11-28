@@ -5,8 +5,9 @@ Integración de OpenCode v2.3.2 con los guardrails del proyecto, sin duplicar l�
 ## Qué se integra
 
 - **Guardrails**: `.opencode/plugins/bk-guardrails/` adapta eventos de OpenCode a `scripts/agents/guardrails.py`.
-- **Edición/sensible**: el plugin llama `lib/land.py hook` (el subcomando `hook`, con el mismo JSON que en Claude Code) en `tool.execute.before/after` para `edit/write`, con el path real. Un deny de `PreToolUse` frena la edición (editar el checkout de `main`).
-- **Falla cerrado**: si `guardrails.py` no existe, no arranca, se cuelga o sale con un estado que no es 0 ni 2, el plugin frena el comando de shell (y deniega el permiso) en vez de dejarlo pasar. Lo mismo para `lib/land.py` en `PreToolUse` si existe y falla. Si falta `lib/land.py` la guarda de edición no corre (la protección de `main` sigue en el hook de git).
+- **Edición/sensible**: el plugin llama `lib/land.py hook` (el subcomando `hook`, con el mismo JSON que en Claude Code) en `tool.execute.before/after` para `edit`, `write`, `multiedit`, `patch` y `apply_patch`, con el path real. Un deny de `PreToolUse` frena la edición (editar el checkout de `main`).
+- **Falla cerrado**: si el plugin no logra registrar ningún hook que frene el shell, `setup` falla con un error en vez de cargarse sin proteger nada.
+- **Falla cerrado (comandos)**: si `guardrails.py` no existe, no arranca, se cuelga o sale con un estado que no es 0 ni 2, el plugin frena el comando de shell (y deniega el permiso) en vez de dejarlo pasar. Lo mismo para `lib/land.py` en `PreToolUse` si existe y falla. Si falta `lib/land.py` la guarda de edición no corre (la protección de `main` sigue en el hook de git).
 - **Eventos de tarea**: el plugin llama `scripts/agents/task_events.py` solo para comandos relevantes (`git commit`, `gh pr create`) y, best-effort, `SessionStart/UserPromptSubmit/Stop` cuando hay `BK_TASK_DIR`.
 - **Protección de main**: no cambia; `githooks/reference-transaction` sigue siendo la barrera Git.
 

@@ -80,11 +80,15 @@ function deny(message) {
   return err;
 }
 
+const SHELL_TOOLS = new Set(['shell', 'bash', 'Bash']);
+// Herramientas que modifican archivos: todas pasan por el hook de land.
+const EDIT_TOOLS = new Set(['edit', 'write', 'multiedit', 'patch', 'apply_patch']);
+const isShellTool = (t) => SHELL_TOOLS.has(asString(t));
+const isEditTool = (t) => EDIT_TOOLS.has(asString(t));
+
 function commandFromToolEvent(event) {
-  const tool = asString(event?.tool);
   const input = asObj(event?.input);
-  if (tool === 'shell' || tool === 'bash' || tool === 'Bash') return asString(input.command);
-  return '';
+  return isShellTool(event?.tool) ? asString(input.command) : '';
 }
 
 function fileFromToolEvent(event) {
@@ -171,6 +175,7 @@ export default {
       console.error(`[bk-opencode] falta ${guardrailsPy}: los comandos de shell se frenan hasta que exista.`);
     }
 
+    let guarded = 0; // hooks que frenan el shell: si ninguno se registra, el plugin no protege nada
     if (ctx?.permission?.hook) {
       try {
         await ctx.permission.hook('evaluate', async (event) => {
@@ -183,8 +188,13 @@ export default {
               event.effect = 'deny';
               event.message = msg;
             }
-          } catch (err) { logDebug(debug, 'permission.evaluate error', err); }
+          } catch (err) {
+            logDebug(debug, 'permission.evaluate error', err);
+            event.effect = 'deny';
+            event.message = 'BK guardrail falló al evaluar el permiso; se frena por seguridad.';
+          }
         });
+        guarded++;
       } catch (err) { logDebug(debug, 'permission hook register error', err); }
     }
 
@@ -194,6 +204,7 @@ export default {
           const msg = evalShellCommand(event?.command, event?.cwd || ctx?.location?.directory || process.cwd());
           if (msg) throw deny(msg);
         });
+        guarded++;
       } catch (err) { logDebug(debug, 'shell hook register error', err); }
     }
 
@@ -201,16 +212,17 @@ export default {
       try {
         await ctx.tool.hook('execute.before', async (event) => {
           const tool = asString(event?.tool);
-          if (tool === 'shell') {
+          if (isShellTool(tool)) {
             const msg = evalShellCommand(commandFromToolEvent(event), ctx?.location?.directory || process.cwd());
             if (msg) throw deny(msg);
           }
-          if (tool === 'edit' || tool === 'write') {
+          if (isEditTool(tool)) {
             const fp = normalizePath(fileFromToolEvent(event), ctx?.location?.directory || process.cwd());
             const msg = evalEdit('PreToolUse', fp, ctx?.location?.directory);
             if (msg) throw deny(msg);
           }
         });
+        guarded++;
       } catch (err) { logDebug(debug, 'tool.execute.before register error', err); }
 
       try {
@@ -218,16 +230,20 @@ export default {
           try {
             const tool = asString(event?.tool);
             const status = asString(event?.status);
-            if ((tool === 'edit' || tool === 'write') && status === 'completed') {
+            if (isEditTool(tool) && status === 'completed') {
               const fp = normalizePath(fileFromToolEvent(event), ctx?.location?.directory || process.cwd());
               evalEdit('PostToolUse', fp, ctx?.location?.directory);
             }
-            if (tool === 'shell' && status === 'completed') {
+            if (isShellTool(tool) && status === 'completed') {
               emitTask(taskPayloadForShell(commandFromToolEvent(event), event?.result));
             }
           } catch (err) { logDebug(debug, 'tool.execute.after error', err); }
         });
       } catch (err) { logDebug(debug, 'tool.execute.after register error', err); }
+    }
+
+    if (guarded === 0) {
+      throw new Error('bk-guardrails: no se pudo registrar ningún hook que frene el shell (¿cambió la API de plugins de OpenCode?)');
     }
 
     // Best-effort task lifecycle mapping for OpenCode sessions.
