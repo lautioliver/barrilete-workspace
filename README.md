@@ -445,7 +445,7 @@ dice qué haría y solo mira.
 ## Supervisión local (`bk supervisor`)
 `bk supervisor propose` lee un `bk.supervisor-plan.v1` cerrado desde stdin. `bk supervisor approve <run_id>` presenta el plan en una terminal humana separada y reserva issues/PRs y slots bajo un lock atómico: máximo tres implementadores, una review por PR. Si no hay slots, queda en cola; los hotfix van primero y no interrumpen. `bk supervisor status` muestra el estado local, con los leases de cada plan, y `cancel` libera una propuesta o reserva con confirmación humana, solo si ningún lease arrancó. El store y el bus están bajo `~/.local/state/bk/supervisor/` (o `XDG_STATE_HOME`); los planes terminados y los eventos se retienen 30 días. Una alta del bus cortada a mitad (la última línea sin fin de línea) se descarta; cualquier otra línea inválida frena sin modificar nada.
 
-Al reservar, cada asignación (incluidos subagentes y relanzamientos) recibe un lease `reserved`. El ciclo es `reserved → running → stale → completed|released`: un adaptador de harness confirma el inicio (PID con su hora de inicio y sesión del harness) y renueva el heartbeat cada 60 s en el estado, sin escribir eventos. `bk supervisor reconcile` marca `stale` un lease sin heartbeat por más de 5 minutos, sin soltar issue ni slot; si después llega un heartbeat con la misma identidad (PID, hora de inicio y sesión) y el adaptador confirma el proceso y la sesión vivos, vuelve a `running` y deja un evento `lease.recovered`. Lo libera (`released`) solo si verifica que el proceso y la sesión del harness ya no existen; si no puede verificarlo, lo informa en `needs_human`. No hay liberación forzada. Un plan se cierra cuando todos sus leases terminan, y eso promueve la cola. Hoy no hay ningún adaptador verificado (`verified_harnesses` vacío en `status`): ningún lease puede arrancar ni cerrarse, y `bk supervisor` no lanza agentes. `--dry-run` solo valida o muestra (`reconcile --dry-run` informa sin escribir).
+Al reservar, cada asignación (relanzamientos incluidos; los subagentes implementadores no se habilitan por ahora, ver ADR-003) recibe un lease `reserved`. El ciclo es `reserved → running → stale → completed|released`: un adaptador de harness confirma el inicio (PID con su hora de inicio y sesión del harness) y renueva el heartbeat cada 60 s en el estado, sin escribir eventos. `bk supervisor reconcile` marca `stale` un lease sin heartbeat por más de 5 minutos, sin soltar issue ni slot; si después llega un heartbeat con la misma identidad (PID, hora de inicio y sesión) y el adaptador confirma el proceso y la sesión vivos, vuelve a `running` y deja un evento `lease.recovered`. Lo libera (`released`) solo si verifica que el proceso y la sesión del harness ya no existen; si no puede verificarlo, lo informa en `needs_human`. No hay liberación forzada. Un plan se cierra cuando todos sus leases terminan, y eso promueve la cola. Hoy no hay ningún adaptador verificado (`verified_harnesses` vacío en `status`): ningún lease puede arrancar ni cerrarse, y `bk supervisor` no lanza agentes. `--dry-run` solo valida o muestra (`reconcile --dry-run` informa sin escribir).
 
 ## Retroalimentación (`bk learn`)
 `bk routing dispatch` y `bk routing outcome` leen un objeto JSON por stdin y anexan eventos validados al store local
@@ -497,6 +497,17 @@ generada (`lib/bitacora.py` y el `scripts/agents/bitacora.py` del kit, que #343 
   a ese archivo (day), a `Shades Of Purple` (night) o a los dos según macOS (auto), y recarga Ghostty con SIGUSR2.
 
 `~/.config/tmux/tmux.conf` es un enlace simbólico a este repo: se edita acá y queda versionado.
+
+## OpenCode (v2.3.2) + guardrails BK
+
+El repo incluye integración local para OpenCode: `opencode.jsonc` + plugin `.opencode/plugins/bk-guardrails/`.
+Reutiliza `scripts/agents/guardrails.py`, `lib/land.py hook` y `scripts/agents/task_events.py` (sin duplicar lógica).
+
+- **Denegado por config**: `git push`, `git tag`, `gh release create`, `gh pr merge`, `bk say`, `bk approve`, `--no-verify`, `.env*`.
+- **Falla cerrado**: si el guardrail no puede correr, el plugin frena el shell; un deny de `lib/land.py hook` frena la edición.
+- **Pide confirmación**: `.github/**`, `package.json`, `gh workflow *`, los archivos del propio guardrail y los intérpretes (`bash`, `sh`, `python3`, `node`).
+- **Límites**: con `opencode run --auto` se auto-aprueban asks no denegados; sin `--auto` en no interactivo se rechazan; en TUI el ask debe confirmarlo una persona. `BK_TASK_DIR` controla eventos de tarea; sin él no se escriben. No reemplaza `githooks/reference-transaction`.
+- Detalle: `docs/agents/opencode.md`.
 
 ## Hook de estado (`hooks/agent_state.sh`)
 Un hook de Claude Code anota el estado de cada sesión (trabajando, te espera, terminó, en segundo plano), su rol, modelo,

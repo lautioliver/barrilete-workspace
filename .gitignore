@@ -18,3 +18,7 @@ __pycache__
 
 # Bitácora de agentes (scripts/agents/bitacora.py, #339): se genera, no se versiona
 .barrilete/bitacora.html
+
+# OpenCode local runtime artifacts (if any)
+.opencode/node_modules/
+.opencode/**/node_modules/

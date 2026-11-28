@@ -62,7 +62,7 @@ Regla: si un documento de producto y el código no coinciden, **gana** [architec
 
 - [Cómo se escribe un ADR](decisions/README.md)
 - [ADR-002](decisions/ADR-002-retroalimentacion-del-ruteo-local.md) — el feedback del ruteo se registra en un store local, con eventos de despacho/resultados y resumen estructurado para Codex (propuesto)
-- [ADR-003](decisions/ADR-003-supervision-local-y-leases.md) — supervisión de Codex, bus local, límites globales y reserva atómica (propuesto)
+- [ADR-003](decisions/ADR-003-supervision-local-y-leases.md) — supervisión de Codex, bus local, límites globales, reserva atómica y acreditación por harness (propuesto)
 - [ADR-002](decisions/kit/ADR-002-structured-red-validation.md) — el rojo se valida solo con un reporte estructurado (JUnit XML)
 - [ADR-003](decisions/kit/ADR-003-minimal-ddd-glossary-and-contexts.md) — cada proyecto recibe un glosario del dominio y un mapa de contextos, con las reglas que los agentes aplican
 - [ADR-004](decisions/kit/ADR-004-orchestrate-launch-mode-per-role.md) — `/orchestrate` lanza cada rol como agente `bk` o como subagente, según `roles.yml` (aceptado)
