@@ -43,6 +43,14 @@ offset = int(os.environ.get("SV_OFFSET", "0"))
 real_now = sv.now
 sv.now = lambda: real_now() + timedelta(seconds=offset)
 sv.require_terminal = lambda action: None
+if os.environ.get("SV_SLOW"):        # agranda la ventana entre leer y escribir el estado
+    import time
+    real_write = sv.write_state
+    sv.write_state = lambda state: (time.sleep(float(os.environ["SV_SLOW"])), real_write(state))[1]
+if os.environ.get("SV_GO"):          # barrera: todos los procesos arrancan juntos
+    import time
+    while not os.path.exists(os.environ["SV_GO"]):
+        time.sleep(0.002)
 
 def rid(name): return str(uuid.uuid5(uuid.NAMESPACE_URL, "run/" + name))
 def lid(name, i): return str(uuid.uuid5(uuid.NAMESPACE_URL, f"lease/{name}/{i}"))
@@ -92,6 +100,9 @@ try:
     elif cmd == "plan":
         with sv.locked():
             print(sv.plan_record(sv.read_state(), rid(args[0]))["status"])
+    elif cmd == "plans":             # plans <estado>: cuántos planes hay en ese estado
+        with sv.locked():
+            print(sum(r["status"] == args[0] for r in sv.read_state()["plans"]))
     elif cmd == "slots":
         print(sv.status()["reserved_implementers"])
     elif cmd == "events":
@@ -109,6 +120,20 @@ except ValueError as exc:
     print("error: " + str(exc))
 PY
 sv()  { SV_LIB="$ROOT/lib" SV_SESSIONS="$SESSIONS" SV_ADAPTER="${ADAPTER:-1}" SV_OFFSET="${OFFSET:-0}" python3 "$TMP/sv.py" "$@"; }
+# race <dir> <comando...> ;: corre cada comando (separados por ';') en paralelo detrás de una barrera,
+# con la escritura del estado demorada; deja la salida de cada uno en <dir>/<n>.
+race() {
+  local dir=$1 i=0 args=() pids=(); shift; mkdir -p "$dir"
+  for word in "$@" ";"; do
+    if [ "$word" = ";" ]; then
+      SV_GO="$dir/go" SV_SLOW=0.15 sv "${args[@]}" >"$dir/$i" 2>&1 & pids+=("$!")
+      i=$((i+1)); args=()
+    else args+=("$word"); fi
+  done
+  sleep 0.5; : >"$dir/go"
+  for p in "${pids[@]}"; do wait "$p"; done
+}
+outs() { cat "$1"/[0-9]* | sort | uniq -c | sed 's/^ *//' | tr '\n' '|'; }
 spawn() { sleep 600 & PIDS+=("$!"); LAST=$!; }
 session() { printf '%s\n' "$2" >"$SESSIONS/$1"; }
 
@@ -200,6 +225,32 @@ check_eq "$(sv finish a 0)" completed "el lease 0 se cierra con salida verificad
 check_eq "$(sv plan a)" closed "con todos los leases terminados el plan se cierra"
 check_eq "$(sv events plan.closed)" 1 "el cierre deja un evento plan.closed"
 check_eq "$(sv slots)" 2 "el plan cerrado ya no ocupa slots"
+
+# --- carreras: varios procesos a la vez sobre el mismo store -----------------------------------------
+export XDG_STATE_HOME="$TMP/race"
+R="$TMP/r"
+race "$R/p" propose r1 implementer:issue:7:normal \; propose r2 implementer:issue:7:normal \; \
+            propose r3 implementer:issue:7:normal \; propose r4 implementer:issue:7:normal \; \
+            propose r5 implementer:issue:7:normal \; propose r6 implementer:issue:7:normal
+check_eq "$(outs "$R/p")" "6 pending|" "seis propose simultáneos terminan bien"
+check_eq "$(sv plans pending)" 6 "ningún propose simultáneo pierde su plan"
+race "$R/dup" propose d1 implementer:issue:8:normal \; propose d1 implementer:issue:8:normal \; \
+              propose d1 implementer:issue:8:normal
+check_eq "$(outs "$R/dup")" "2 error: run_id ya existe|1 pending|" "tres propose con el mismo run_id: uno solo entra"
+race "$R/a" approve r1 \; approve r2 \; approve r3 \; approve r4 \; approve r5 \; approve r6
+check_eq "$(grep -l '^reserved$' "$R/a"/[0-9]* | wc -l | tr -d ' ')" 1 "seis approve sobre el mismo issue: uno solo reserva"
+check_eq "$(grep -l 'ya está reservado' "$R/a"/[0-9]* | wc -l | tr -d ' ')" 5 "los otros cinco ven el issue reservado"
+check_eq "$(sv plans reserved)" 1 "el estado tiene un solo plan reservado"
+check_eq "$(sv events plan.reserved)" 1 "el bus tiene un solo plan.reserved"
+check_eq "$(sv slots)" 1 "el issue ocupa un solo slot"
+
+export XDG_STATE_HOME="$TMP/race-slots"
+for n in 1 2 3 4 5 6; do sv propose "s$n" "implementer:issue:2$n:normal" >/dev/null; done
+race "$R/s" approve s1 \; approve s2 \; approve s3 \; approve s4 \; approve s5 \; approve s6
+check_eq "$(outs "$R/s")" "3 queued|3 reserved|" "seis approve en issues distintos: tres reservan y tres esperan"
+check_eq "$(sv slots)" 3 "la carrera no pasa el límite de tres implementadores"
+check_eq "$(sv events plan.queued)" 3 "el bus registra los tres encolados"
+export XDG_STATE_HOME="$TMP/state"
 
 # --- estado viejo y CLI ------------------------------------------------------------------------------
 check_eq "$(sv legacy b)" ok "se simula un estado anterior a los leases"
