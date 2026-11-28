@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/hooks/codex_handoff.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\""
           }
         ]
       }
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/hooks/codex_handoff.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\""
           },
           {
             "type": "command",
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/hooks/codex_handoff.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\""
           },
           {
             "type": "command",
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/hooks/codex_handoff.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\""
           }
         ]
       },
@@ -72,7 +72,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/hooks/codex_handoff.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\""
           }
         ]
       }
@@ -82,7 +82,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/hooks/codex_handoff.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\""
           }
         ]
       }
@@ -92,7 +92,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/hooks/codex_handoff.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\""
           }
         ]
       }
@@ -102,7 +102,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/hooks/codex_handoff.py\""
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/hooks/codex_handoff.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\""
           },
           {
             "type": "command",
