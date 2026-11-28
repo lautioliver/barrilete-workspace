@@ -73,7 +73,7 @@ Cómo prueba cada harness que una sesión sigue viva o terminó, de dónde salen
 - **Marca de sesión (confirmado por Lautaro en el chat, 2026-11-28).** El hook de inicio de sesión de cada harness escribe una marca en `${XDG_STATE_HOME:-~/.local/state}/bk/supervisor/` con el harness, la sesión, el PID del proceso del agente y su hora de inicio (`ps -o lstart=` con `TZ=UTC`, como `process_state`). El hook de fin de sesión, donde existe, la cierra. El adaptador lee esa marca; no la escribe un agente ni el CLI. Los hooks se implementan en cada adaptador, no en este ADR.
 - **PID del agente.** En los tres harness verificados el hook es hijo directo del proceso del agente: el PID es el `PPID` del hook. Un subagente corre dentro de ese mismo proceso y no tiene PID propio.
 - **Sesión viva o terminada.** Viva: la marca existe, el proceso con ese PID y esa hora de inicio sigue vivo y no hay fin de sesión registrado. Terminada: fin de sesión registrado (si el harness lo tiene) **y** proceso ausente o con otra hora de inicio. Sin evento de fin, solo la ausencia del proceso prueba el fin. Cualquier otra combinación es `unknown` y el lease queda como está (`stale` no libera).
-- **Subagentes (decidido el 2026-11-28).** Un subagente implementador (`implementer`, `implementer-light`) sin lease propio se rechaza con un hook `PreToolUse` sobre la herramienta que lo lanza, antes de que arranque. El lease del subagente usa el PID y la hora de inicio de su proceso padre y su propia sesión (la del subagente, abajo por harness). No hay reserva dinámica de slots: el subagente tiene que estar en el plan aprobado. Un subagente no implementador (lector, `Explore`) no consume slot ni se rechaza.
+- **Subagentes (decidido el 2026-11-28).** Un subagente implementador (`implementer`, `implementer-light`) sin lease propio se rechaza con un hook `PreToolUse` sobre la herramienta que lo lanza, antes de que arranque. En ese momento el subagente todavía no tiene id: el hook busca un lease `reserved`, sin enlazar, cuya asignación tenga ese rol y cuya sesión padre sea la que lanza (la marca de sesión dice cuál es). Si no hay uno, niega. Al arrancar, el subagente enlaza ese lease con su propia sesión (abajo, por harness), y usa el PID y la hora de inicio de su proceso padre. Si el enlace es ambiguo (dos leases sin enlazar del mismo rol en la misma sesión padre), el lease queda sin iniciar y se pide intervención humana. No hay reserva dinámica de slots: el subagente tiene que estar en el plan aprobado. Un subagente no implementador (lector, `Explore`) no consume slot ni se rechaza.
 
 ### Claude Code (2.1.332, verificado en vivo)
 
@@ -83,7 +83,7 @@ Cómo prueba cada harness que una sesión sigue viva o terminó, de dónde salen
 | PID y hora de inicio | El `PPID` del hook es el proceso `claude`; la hora sale de `ps -o lstart=`. |
 | Subagente | `PreToolUse` con `tool_name: Agent` y `tool_input.subagent_type` antes de lanzarlo; después `SubagentStart` y `SubagentStop` con `agent_id` y `agent_type`. Los `PreToolUse` del subagente traen `agent_id` y `agent_type`; los del padre no. El subagente comparte PID con la sesión. |
 | Sesión del subagente | `<session_id>:<agent_id>` (cabe en `SESSION_ID`). Fin: `SubagentStop`. Ojo: en `SubagentStop`, `background_tasks` todavía lo lista como `running`; el fin se toma del evento, no de ese campo. |
-| Rechazo sin lease | `PreToolUse` con matcher `Agent`: si `subagent_type` es `implementer` o `implementer-light` y no hay un lease `reserved` para esa sesión, devuelve `deny`. |
+| Rechazo sin lease | `PreToolUse` con matcher `Agent`: si `subagent_type` es `implementer` o `implementer-light` y no hay un lease `reserved` sin enlazar de ese rol para la sesión padre (`session_id`), devuelve `deny`. `SubagentStart` lo enlaza a `<session_id>:<agent_id>`. |
 | Modelo | No viene en el payload del hook: sale del transcript (`transcript_path`, como `hooks/agent_state.sh`) o queda `unknown`. |
 
 ### Codex (codex-cli 0.170.0, verificado en parte)
@@ -106,11 +106,11 @@ Codex no recibe adaptador hasta verificar, con hooks aprobados, el payload de se
 | Sesión | `conversationId` en todos los hooks; `modelName` también (se vio `gemini-4-carbon-medium`). |
 | PID y hora de inicio | El `PPID` del hook es el proceso `agy`, también para los hooks del subagente. |
 | Subagente | El padre llama a `invoke_subagent` (`Prompt`, `Role`, `TypeName`); el subagente arranca con su propio `SessionStart` y otro `conversationId`, en el mismo proceso, y responde con `send_message` cuyo `Recipient` es la conversación del padre. Su `SessionStart` no trae el id del padre. |
-| Sesión del subagente | Su `conversationId`. Fin: `unknown` (no hay evento de fin); se toma como terminado solo cuando el proceso `agy` ya no está. |
-| Rechazo sin lease | `PreToolUse` con matcher `invoke_subagent`: si `Role`/`TypeName` es implementador y no hay lease, rechaza. La forma de la respuesta que niega (`{"decision": "deny"}`) es `unknown`: se vio `{"decision": "ask"}` en un hook instalado, no un `deny` probado. |
+| Sesión del subagente | Su `conversationId`. Enlace con el lease: `unknown`, porque su `SessionStart` no trae el id del padre y el `PostToolUse` de `invoke_subagent` no mostró el id del hijo; con un solo lease sin enlazar en ese proceso, no es ambiguo. Fin: `unknown` (no hay evento de fin); se toma como terminado solo cuando el proceso `agy` ya no está. |
+| Rechazo sin lease | `PreToolUse` con matcher `invoke_subagent`: si `Role`/`TypeName` es implementador y no hay un lease `reserved` sin enlazar de ese rol para la conversación padre (`conversationId`), rechaza. La forma de la respuesta que niega (`{"decision": "deny"}`) es `unknown`: se vio `{"decision": "ask"}` en un hook instalado, no un `deny` probado. |
 | Modo | `--mode auto` no está disponible para esta cuenta; la prueba corrió en el modo por defecto. |
 
-Sin evento de fin de sesión, un `agy` interactivo vivo mantiene su lease aunque la conversación haya terminado: se libera al cerrar el proceso, o con intervención humana.
+Sin evento de fin de sesión, un `agy` interactivo vivo mantiene sus leases aunque la conversación haya terminado: el suyo y el de cada subagente implementador, que comparte su proceso. Un subagente que ya terminó sigue ocupando uno de los tres slots hasta que se cierra `agy` o una persona interviene.
 
 ## Propuesta concreta para revisión (no aceptada)
 
