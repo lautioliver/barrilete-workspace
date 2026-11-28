@@ -1017,6 +1017,17 @@ def do(args):
         raise Fail(f"no existe la carpeta {cwd}")
     if os.environ.get("BK_DRY") or "--dry-run" in cmd:   # bk --dry-run _do …, o el --dry-run del bk de adentro
         return {"ok": True, "dry": True, "cmd": ["bk"] + cmd, "cwd": cwd}
+    # Lo que se lanza acá queda suelto (start_new_session) y su árbol de procesos termina en launchd: el chequeo de
+    # human_cli lo dejaría pasar allá. Se hace acá, con el árbol de quien pidió bk _do (#45).
+    import human_cli
+    reserved = human_cli.human_only(cmd)
+    if reserved:
+        try:
+            blocked = human_cli.reason()
+        except (OSError, subprocess.SubprocessError):
+            blocked = "the caller process tree could not be verified"
+        if blocked:
+            raise Fail(f"bk {reserved}: {blocked}; ejecutalo desde una terminal humana separada, fuera del chat del agente.")
     logs = os.path.join(cache_dir(), "do")
     os.makedirs(logs, exist_ok=True)
     for old in os.listdir(logs):   # los logs de más de una semana se van

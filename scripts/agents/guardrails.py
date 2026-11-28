@@ -125,7 +125,7 @@ def comandos(texto):
         tokens = re.findall(r"[;&|()]+|[^\s;&|()'\"]+", texto)
     actual = []
     for tok in tokens:
-        if set(tok) <= set(";&|()"):
+        if tok and set(tok) <= set(";&|()"):   # '' is an empty word, not a separator
             if actual:
                 yield actual
             actual = []
@@ -267,20 +267,42 @@ def metodo_api(args):
 
 
 def analizar_bk(args):
-    """bk say/approve and supervisor approval are human-only."""
-    if "--dry-run" in args:
-        return None
-    i = 0
-    while i < len(args) and args[i].startswith("-"):
-        if args[i] == "--account":
-            i += 2
-        else:
-            i += 1
-    if i < len(args) and args[i] in ("say", "approve"):
-        return f"human-only BK command (bk {args[i]}); run it from a separate human terminal"
-    if i + 1 < len(args) and args[i:i + 2] == ["supervisor", "approve"]:
+    """bk say/approve and supervisor approval are human-only, also inside bk _do, _hub _do and _do_run (#45)."""
+    for _ in range(64):
+        # Leading options first (bk --account X _do_run …): a --dry-run among them makes the whole bk a dry run.
+        i = 0
+        while i < len(args) and args[i].startswith("-"):
+            if args[i] == "--dry-run":
+                return None
+            i += 2 if args[i] == "--account" else 1
+        args = args[i:]
+        # bk _do [--cwd D] [--title T] -- <cmd> and bk _do_run <log> <title> [--] <cmd> run another bk, and
+        # bk _hub _do is bk _do. Their own arguments go to bk as they are: a --dry-run there is a value.
+        if args[:2] == ["_hub", "_do"]:
+            args = args[1:]
+        if args[:1] == ["_do"]:
+            j = 1
+            while j < len(args) and args[j] != "--":
+                j += 2
+            args = args[j + 1:]
+            continue
+        if args[:1] == ["_do_run"]:
+            args = args[3:]
+            if args[:1] == ["--"]:
+                args = args[1:]
+            continue
+        if args[:1] == ["_hub"]:
+            return None
+        if "--dry-run" in args:      # bk takes it out wherever it is
+            return None
+        break
+    else:
+        return "human-only BK command check: bk _do nested too deep to verify; run it from a separate human terminal"
+    if args[:1] in (["say"], ["approve"]):
+        return f"human-only BK command (bk {args[0]}); run it from a separate human terminal"
+    if args[:2] == ["supervisor", "approve"]:
         return "human-only BK command (bk supervisor approve); run it from a separate human terminal"
-    if i + 1 < len(args) and args[i:i + 2] == ["supervisor", "cancel"]:
+    if args[:2] == ["supervisor", "cancel"]:
         return "human-only BK command (bk supervisor cancel); run it from a separate human terminal"
     return None
 
@@ -373,8 +395,8 @@ def tag_existe(nombre, cwd):
 
 def a_ojo(comando):
     """Last resort if the analysis fails: look for the blocked commands in the raw text."""
-    patrones = (r"\bbk\s+(?:--dry-run\s+)?(?:say|approve)\b",
-                r"\bbk\s+supervisor\s+(?:approve|cancel)\b",
+    patrones = (r"\bbk\b[^\n;&|]*\b(?:say|approve)\b",   # also bk _do … -- approve
+                r"\bbk\b[^\n;&|]*\bsupervisor\s+(?:approve|cancel)\b",
                 r"\bgh\b[^\n;&|]*\bpr\s+merge\b", r"\bgh\b[^\n;&|]*\bpr\s+review\b[^\n;&|]*--approve",
                 r"\bgh\s+release\s+(create|delete|edit|upload)\b", r"--no-verify\b", r"\bgit\s+tag\s+\S",
                 rf"\bgit\b[^\n;&|]*\bpush\b[^\n;&|]*\b({TRONCAL_RE})\b")

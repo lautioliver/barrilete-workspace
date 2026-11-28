@@ -71,6 +71,51 @@ def reason():
     return "the caller process tree could not be verified"
 
 
+def human_only(args):
+    """The human-only command that `bk <args>` runs, also through _do or _do_run (#45); None if it runs none.
+
+    Follows bin/bk: with _hub/_do/_do_run first, the arguments go as they are; otherwise --dry-run and
+    --account X come out wherever they are. bk _do [--cwd D] [--title T] -- <cmd> and bk _do_run <log> <title>
+    [--] <cmd> run another bk.
+    """
+    for _ in range(64):
+        if args[:1] == ["_do"]:
+            i = 1
+            while i < len(args) and args[i] != "--":
+                if args[i] not in ("--cwd", "--title") or i + 1 >= len(args):
+                    return None      # bk _do rejects it: nothing runs
+                i += 2
+            args = args[i + 1:]
+            continue
+        if args[:1] == ["_do_run"]:
+            args = args[3:]
+            if args[:1] == ["--"]:
+                args = args[1:]
+            continue
+        if args[:1] == ["_hub"]:
+            if args[1:2] != ["_do"]:
+                return None      # the other topics only read: none runs a bk command
+            args = args[1:]      # bk _hub _do … is bk _do … (_do is a topic of lib/herdr_hub.py)
+            continue
+        words, i = [], 0
+        while i < len(args):
+            if args[i] == "--account":
+                i += 2
+                continue
+            if args[i] != "--dry-run":
+                words.append(args[i])
+            i += 1
+        if words[:1] in (["_do"], ["_do_run"], ["_hub"]):
+            args = words
+            continue
+        if words[:1] in (["say"], ["approve"]):
+            return words[0]
+        if words[:2] in (["supervisor", "approve"], ["supervisor", "cancel"]):
+            return " ".join(words[:2])
+        return None
+    return "_do anidado"     # nested beyond reason: treat it as human-only (the notice reads "bk _do anidado: …")
+
+
 def main(argv):
     if len(argv) != 2 or argv[1] not in ("say", "approve", "cancel"):
         print("uso interno: human_cli.py {say|approve|cancel}", file=sys.stderr)
@@ -83,7 +128,6 @@ def main(argv):
         print(f"bk {argv[1]}: {blocked}; ejecutalo desde una terminal humana separada, fuera del chat del agente.",
               file=sys.stderr)
         return 1
-    # #57: la persona confirma por el mecanismo del sistema, antes del efecto. Denegar es el caso seguro.
     return 0
 
 
