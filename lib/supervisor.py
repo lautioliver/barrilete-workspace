@@ -317,6 +317,8 @@ def event_rows():
     try:
         with open(EVENTS, encoding="utf-8") as stream:
             for line in stream:
+                if not line.endswith("\n"):
+                    return        # alta cortada a mitad (solo puede ser la última): no es un evento
                 try:
                     event = json.loads(line)
                     require_keys(event, ("v", "event_id", "ts", "kind", "run_id", "assignment_count",
@@ -363,6 +365,31 @@ def plan_priority(plan):
     return "normal"
 
 
+def drop_torn_tail_locked():
+    """Cut an unterminated last line (a write interrupted mid-way) so the next event starts on its own line."""
+    try:
+        with open(EVENTS, "rb+") as stream:
+            size = stream.seek(0, os.SEEK_END)
+            if size == 0:
+                return
+            stream.seek(size - 1)
+            if stream.read(1) == b"\n":
+                return
+            end = size
+            while end > 0:
+                start = max(0, end - 4096)
+                stream.seek(start)
+                chunk = stream.read(end - start)
+                cut = chunk.rfind(b"\n")
+                if cut >= 0:
+                    stream.truncate(start + cut + 1)
+                    return
+                end = start
+            stream.truncate(0)
+    except FileNotFoundError:
+        return
+
+
 def append_event_locked(kind, plan, reason_code, assignment=None):
     assignments = [assignment] if assignment is not None else plan["assignments"]
     event = {"v": 1, "event_id": str(uuid.uuid4()), "ts": iso(), "kind": kind,
@@ -370,6 +397,7 @@ def append_event_locked(kind, plan, reason_code, assignment=None):
              "implementer_count": sum(a["role"] in ("implementer", "implementer-light")
                                       for a in assignments),
              "priority": plan_priority({"assignments": assignments}), "reason_code": reason_code}
+    drop_torn_tail_locked()
     with open(EVENTS, "a", encoding="utf-8") as stream:
         os.chmod(EVENTS, 0o600)
         stream.write(json.dumps(event, separators=(",", ":")) + "\n")
