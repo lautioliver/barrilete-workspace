@@ -175,7 +175,8 @@ check_eq "$(cc link r-ended 0)" none "marca con ended_at: no enlaza"
 # /clear o resume antes del enlace: la sesión del proceso cambió (ADR-003: queda unknown hasta verificarlo).
 cc mark l-clear-old "$P5" "$S5" "$T0" "$T1" r-clear 0
 cc mark l-clear-new "$P5" "$S5" "$T2" - r-clear 0
-check_eq "$(cc link r-clear 0)" none "una marca terminada del mismo proceso y lease (un /clear antes del enlace): no enlaza"
+got=$(cc link r-clear 0); r=0; [ "$got" = none ] || r=1
+tap_check "$r" "una marca terminada del mismo proceso y lease (un /clear antes del enlace): no enlaza" "got '$got', want 'none'"
 cc mark l-dead "$P2" "$S2" "$T0" - r-dead 0
 check_eq "$(cc link r-dead 0)" none "marca de un proceso que ya no existe: no enlaza"
 cc mark l-stale "$P5" "Mon Jan  1 00:00:00 2001" "$T0" - r-stale 0
