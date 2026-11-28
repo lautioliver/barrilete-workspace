@@ -186,6 +186,22 @@ class BkDeUnaPersona(unittest.TestCase):
         self.assertIsNotNone(frena("bk " + "_do -- " * 2000 + "say 3 si"))
         self.assertIsNotNone(frena("bk " + "_do -- " * 2000 + "run 1"))
 
+    def test_hub_do_es_otro_do(self):
+        for c in ("bk _hub _do -- approve t1", "bk _do -- _hub _do -- say 3 si",
+                  "bk _do_run /l t -- _hub _do --cwd /tmp -- supervisor approve x", "bk --account w _hub _do -- approve t1"):
+            self.assertIsNotNone(frena(c), c)
+        self.assertIsNone(frena("bk _hub _do -- run 1"))
+
+    def test_dry_run_como_valor_no_apaga_el_hook(self):
+        for c in ("bk _do --title --dry-run -- approve t1", "bk _do --cwd --dry-run -- approve t1",
+                  "bk _do_run /tmp/l --dry-run -- approve t1", "bk _do_run --dry-run t -- say 3 si"):
+            self.assertIsNotNone(frena(c), c)
+
+    def test_a_ojo_ve_do(self):
+        from guardrails import a_ojo
+        for c in ("bk _do -- approve t1", "bk _do_run /l t -- say 3 si", "bk _do --cwd /x -- supervisor approve x"):
+            self.assertIsNotNone(a_ojo(c), c)
+
     def test_lo_demas_de_do_pasa(self):
         for c in ("bk _do -- run 42", "bk _do --cwd /tmp --title 'Chat nuevo' -- chat",
                   "bk _do --title approve -- open /tmp", "bk _do --cwd say -- run 1", "bk _hub issues",

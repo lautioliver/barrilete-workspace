@@ -122,6 +122,11 @@ say 3 si
 supervisor approve x
 EOF
 
+do_ agente --cwd "$TMP" -- _hub _do -- approve t1
+[ "${out%%:*}" = negado ]; tap_check $? "bk _do niega a un agente un comando de una persona dentro de _hub _do" "got: $out"
+do_ agente --cwd "$TMP" -- _hub issues
+[ "$out" = lanzado ]; tap_check $? "bk _do de un agente lanza bk _hub" "got: $out"
+
 do_ agente --cwd "$TMP" -- run 42
 [ "$out" = lanzado ]; tap_check $? "bk _do de un agente lanza lo que no es de una persona" "got: $out"
 do_ agente --cwd "$TMP" -- approve t1 --dry-run
