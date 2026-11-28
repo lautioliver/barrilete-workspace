@@ -1,0 +1,35 @@
+# OpenCode + guardrails de BK
+
+Integración de OpenCode v2.3.2 con los guardrails del proyecto, sin duplicar lógica.
+
+## Qué se integra
+
+- **Guardrails**: `.opencode/plugins/bk-guardrails/` adapta eventos de OpenCode a `scripts/agents/guardrails.py`.
+- **Edición/sensible**: el plugin llama `lib/land.py hook` en `tool.execute.before/after` para `edit/write`, con el path real.
+- **Eventos de tarea**: el plugin llama `scripts/agents/task_events.py` solo para comandos relevantes (`git commit`, `gh pr create`) y, best-effort, `SessionStart/UserPromptSubmit/Stop` cuando hay `BK_TASK_DIR`.
+- **Protección de main**: no cambia; `githooks/reference-transaction` sigue siendo la barrera Git.
+
+## Configuración
+
+- `opencode.jsonc` en la raíz del repo define permisos nativos OpenCode:
+  - `deny`: `git push *`, `git tag *`, `gh release create *`, `gh pr merge *`, `*--no-verify*`, `.env*`.
+  - `ask`: `.github/**`, `package.json`, `gh workflow *`.
+  - `allow`: lecturas/comandos seguros habituales (`git status/diff/log/show/branch/rev-parse`, `bk *`, etc.).
+- El plugin se registra como paquete local: `./.opencode/plugins/bk-guardrails` con `options.scriptsDir`.
+
+## Comportamiento confirmado (v2.3.2)
+
+- `opencode debug config` normaliza `permission` a `permissions` con `action/resource/effect`; la última regla gana.
+- Hooks disponibles en plugin v2: `permission.hook('evaluate')`, `shell.hook('create.before')`, `tool.hook('execute.before/after')`, `session.hook(...)`, `event.subscribe`.
+- `permission.evaluate` puede cambiar `effect/message` en allow/ask; denys configurados pueden no pasar por hook.
+- `shell.create.before` recibe `command/cwd/timeout/shell/env`; tirar error bloquea antes de ejecutar.
+- En `opencode run` no interactivo sin `--auto`, los `ask` se rechazan como `permission.rejected`. Con `--auto`, los asks no denegados se auto-aprueban.
+- En TUI, los `ask` deben requerir confirmación humana; validar manualmente en la UI.
+
+## Límites
+
+- El plugin es adaptador; la política semántica vive en scripts BK existentes.
+- Sin `BK_TASK_DIR`, `task_events.py` no escribe eventos de tarea.
+- El mapeo `Stop` por `event.subscribe` es best-effort según eventos expuestos por el runtime.
+- La configuración debe estar en el directorio/contexto donde se ejecuta OpenCode; un worktree hijo no hereda automáticamente el `.opencode/opencode.jsonc` del padre en probes locales.
+- No reemplaza hooks Git ni la aprobación humana para acciones sensibles.
