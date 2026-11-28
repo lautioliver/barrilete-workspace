@@ -256,6 +256,10 @@ caída, así que la lista puede traer chats que cerraste a propósito: para eso 
   Corré `bk say` desde una terminal humana separada, fuera del chat o la sesión del agente. Los guardrails bloquean el
   comando dentro de herramientas de agentes (también dentro de `bk _do` y `bk _do_run`) y el CLI verifica el proceso
   que lo invoca.
+  Desde #57, `bk say`, `bk approve` y `bk supervisor approve|cancel` piden además la confirmación de una persona con
+  Touch ID o la contraseña del sistema (macOS LocalAuthentication), antes de ejecutar nada. Si cancelás, el mecanismo
+  no está disponible o hay error, la operación se deniega. No hay alternativa por terminal. El diálogo muestra solo la
+  operación y el destino (la ventana, la tarea o el run), nunca el texto del mensaje.
 - `bk watch [ventana]`: espejo en vivo de un agente; sin ventana toma el próximo libre.
 - `bk fix <pr> "instrucción"`: implementer sobre la rama de un PR abierto, reusando su worktree.
 

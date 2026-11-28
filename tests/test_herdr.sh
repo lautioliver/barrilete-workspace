@@ -20,6 +20,7 @@ chmod +x "$TMP/fake"/*; : >"$TMP/otros.log"
 N=0; FAILED=0
 check_eq() { N=$((N+1)); if [ "$1" = "$2" ]; then echo "ok $N - $3"; else echo "not ok $N - $3 (got '$1', want '$2')"; FAILED=$((FAILED+1)); fi; }
 has() { case "$1" in *"$2"*) echo si ;; *) echo no ;; esac; }
+listar() { local f; for f in "$1"/*; do [ -e "$f" ] && printf '%s\n' "${f##*/}"; done; }   # nombres de una carpeta, sin ls
 
 STATE="$HOME/.cache/sketchybar/agents"
 plain() { PATH="$TMP/fake:$PATH" "$ROOT/bin/bk" "$@"; }                    # sin BK_BACKEND: decide la config
@@ -29,9 +30,12 @@ bk()    { PATH="$TMP/fake:$PATH" BK_BACKEND=herdr "$ROOT/bin/bk" "$@"; }
 # anota que lo llamaron; el bloqueo de verdad se prueba aparte, con BK_TASK_DIR.
 HWS="$TMP/human-ws"; mkdir -p "$HWS/bin" "$HWS/lib"
 for f in "$ROOT"/* "$ROOT"/.[!.]*; do case "${f##*/}" in bin|lib) ;; *) ln -s "$f" "$HWS/${f##*/}" ;; esac; done
-for f in "$ROOT"/lib/*; do [ "${f##*/}" = human_cli.py ] || ln -s "$f" "$HWS/lib/${f##*/}"; done
+for f in "$ROOT"/lib/*; do case "${f##*/}" in human_cli.py|human_confirm.py) ;; *) ln -s "$f" "$HWS/lib/${f##*/}" ;; esac; done
 cp "$ROOT/bin/bk" "$HWS/bin/bk"
 printf 'import sys\nopen("%s/human_cli.log", "a").write(sys.argv[1] + "\\n")\n' "$TMP" >"$HWS/lib/human_cli.py"
+# #57: human_confirm real abre el diálogo de Touch ID: aquí un stub que anota lo que le piden y responde según
+# HC_STUB (ok | cancel). Nunca abre UI; bk lo llama con <operación> <destino>, igual que el real.
+printf 'import os, sys\nopen("%s/confirm.log", "a").write(" ".join(sys.argv[1:]) + "\\n")\nsys.exit(0 if os.environ.get("HC_STUB", "ok") == "ok" else 1)\n' "$TMP" >"$HWS/lib/human_confirm.py"
 hbk()   { PATH="$TMP/fake:$PATH" BK_BACKEND=herdr "$HWS/bin/bk" "$@"; }
 log()   { cat "$HD_FAKE/log" 2>/dev/null; }
 st()    { jq "$@" "$HD_FAKE/state.json"; }
@@ -103,6 +107,7 @@ check_eq "$(tasks state proj pr11-reviewer)" "cancelled" "bk review sin poder et
 
 (cd "$REPO" && bk review 9 >/dev/null 2>&1); check_eq "$?" "0" "bk review: lanza"
 R=$(st -r '.terms | to_entries[] | select(.value.labels["bk.win"] == "pr9") | .key')
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 check_eq "$(st -r --arg t "$R" '.terms[$t].labels | .["bk.role"] + " " + .["bk.ref"]')" "reviewer #9" "bk review: reviewer del PR"
 out=$(cd "$REPO" && bk plan una idea 2>&1 && cd "$REPO" && bk plan otra idea 2>&1); rc=$?
 check_eq "$rc" "1" "bk plan dos veces: la segunda falla"
@@ -136,6 +141,16 @@ rm -f "$HD_FAKE/screen-t2"; mkdir -p "$STATE"
 echo "{\"pane\": \"t2\", \"state\": \"working\", \"ts\": $(date +%s)}" >"$STATE/sesion-i7.json"
 : >"$HD_FAKE/log"; out=$(hbk say i7 "para después" 2>&1)
 check_eq "$(log | grep -c send) $(has "$out" encolado)" "0 si" "bk say a un agente que trabaja: lo encola"
+# #57: la confirmación va una sola vez, con el destino resuelto; el texto del mensaje no llega al diálogo
+: >"$TMP/confirm.log"; : >"$HD_FAKE/log"; hbk say --now i7 "hola confirmado" >/dev/null 2>&1
+check_eq "$(wc -l <"$TMP/confirm.log" | tr -d ' ')" "1" "bk say --now i7: confirma exactamente una vez"
+check_eq "$(grep -c 'hola confirmado' "$TMP/confirm.log")" "0" "bk say --now i7: el texto del mensaje no va al diálogo"
+check_eq "$(cat "$TMP/confirm.log")" "bk say i7" "bk say --now i7: el destino confirmado es la ventana resuelta"
+check_eq "$(log | grep -c send)" "1" "bk say --now i7 confirmado: escribe una vez"
+: >"$TMP/confirm.log"; : >"$HD_FAKE/log"; out=$(hbk say --now "destino automatico" 2>&1); rc=$?
+check_eq "$rc $(wc -l <"$TMP/confirm.log" | tr -d ' ') $(log | grep -c send) $(has "$out" "te esperan")" "1 0 0 si" "bk say automático ambiguo: no confirma ni escribe, y lista a quién"
+: >"$TMP/confirm.log"; : >"$HD_FAKE/log"; out=$(HC_STUB=cancel hbk say --now i7 "no debe salir" 2>&1); rc=$?
+check_eq "$rc $(log | grep -c send) $(grep -c 'no debe salir' "$HD_FAKE/log" 2>/dev/null) $(has "$out" "confirmación denegada")" "1 0 0 si" "bk say cancelado: no escribe, no encola y lo dice"
 bk _drain "$TD" t2 >/dev/null 2>&1
 check_eq "$(log)" "hc send t2 para después" "bk _drain: escribe lo encolado en su terminal"
 
@@ -144,12 +159,13 @@ echo "{\"pane\": \"$R\", \"state\": \"idle\", \"ts\": 1}" >"$STATE/sesion-pr9.js
 : >"$HD_FAKE/log"; bk stop i7 >/dev/null 2>&1; check_eq "$?" "0" "bk stop: cierra"
 check_eq "$(log)" "hc kill t2" "bk stop: cierra la terminal del agente"
 check_eq "$(tasks state proj 7-implementer)" "cancelled" "bk stop: cancela su tarea"
-check_eq "$(ls "$STATE" | tr '\n' ' ')" "bk-plan.json bk-pr9.json sesion-pr9.json " "bk stop: borra el estado de ese agente y no el de otros"
+check_eq "$(listar "$STATE" | tr '\n' ' ')" "bk-plan.json bk-pr9.json sesion-pr9.json " "bk stop: borra el estado de ese agente y no el de otros"
 
 # --- bk chat ---
 : >"$HD_FAKE/log"; (cd "$REPO" && bk chat >/dev/null 2>&1)
 check_eq "$(log | grep -c '^app do tab.new')" "1" "bk chat: otra pestaña del mismo espacio"
 C=$(st -r '.terms | to_entries[] | select(.value.labels["bk.win"] == "proj-2") | .key')
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 check_eq "$(st -r --arg t "$C" '[.spaces[0].tabs[] | select(.terminals[0] == $t) | .name][0]')" "chat-2" "bk chat: se llama chat-2 y su chat, proj-2"
 (cd "$REPO" && bk chat --nombre Idea >/dev/null 2>&1)
 check_eq "$(st -r '.terms | to_entries[] | select(.value.labels["bk.win"] == "proj-3") | .value.labels["bk.name"]')" "Idea" "bk chat --nombre: el chat lleva ese nombre"
@@ -176,7 +192,7 @@ PATH="$TMP/fake:$PATH" BK_BACKEND=herdr HC_TERMINAL_ID=t1 "$ROOT/bin/bk" handoff
 check_eq "$(jq -r '.session' "$BK_HANDOFF_DIR/abc123.json" 2>/dev/null)" "proj" "bk handoff --pedido en Herdr: anota de qué chat viene"
 
 # --- el resumen quedó escrito (bk handoff --listo, lo corre el hook): si lo pidió la persona se abre solo ---
-H="$ROOT/lib/handoff.py"; tabs() { st '[.spaces[].tabs[]] | length'; }
+tabs() { st '[.spaces[].tabs[]] | length'; }
 printf '# resumen\n' >"$BK_HANDOFF_DIR/abc123.md"; n0=$(tabs); : >"$HD_FAKE/log"
 bk handoff --listo abc123 >/dev/null 2>&1
 check_eq "$(( $(tabs) - n0 )) $(log | grep -c 'mod.open')" "1 0" "handoff --listo, pedido por la persona: abre solo el chat nuevo, sin aviso"
@@ -200,10 +216,13 @@ bk handoff --seguir >/dev/null 2>&1; check_eq "$?" "1" "handoff --seguir sin res
 
 # --- el chat nuevo de un handoff sigue siendo el mismo trabajo: nombre, estado y unión con el viejo ---
 newterm() { st -r '.terms | keys_unsorted | last'; }
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 lab() { st -r --arg t "$1" --arg k "$2" '.terms[$t].labels[$k] // ""'; }
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 tabname() { st -r --arg id "$(lab "$1" herdr.tab)" '[.spaces[].tabs[] | select(.id == $id) | .name] | first // ""'; }
 resumen() {   # resumen <sid>: pedido desde t1 y escrito con la plantilla llena
   (cd "$REPO" && HC_TERMINAL_ID=t1 BK_HC="$TMP/fake/hc" PATH="$TMP/fake:$PATH" python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import handoff; handoff.request(sys.argv[3], cwd=sys.argv[2])' "$ROOT/lib" "$REPO" "$1") >/dev/null
+  # shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
   printf '# Seguir desde abc: Escáner de staff\nDe dónde: …\n\n## Hecho\n- PR #1090\n\n## Falta (en orden)\n1. Primer paso: mergear `#1095` y avisar.\n2. otro\n' >"$BK_HANDOFF_DIR/$1.md"
 }
 PATH="$TMP/fake:$PATH" hc label t1 "bk.autotitle=Release #1095" "bk.status=falta el deploy" >/dev/null
@@ -276,7 +295,7 @@ check_eq "$(cmp -s "$ROOT/herdr/mods/bk/main.js" "$APP/mods/bk-term/main.js" && 
 # Cada tecla que abre un mod tiene su carpeta completa (una acción o un panel del hub); faltan = las que no
 faltan=$(jq -r '.global[] | select(type == "string" and startswith("mod.open:bk-")) | sub("mod.open:"; "")' "$ROOT/herdr/keys.json" \
   | while read -r m; do { [ -f "$APP/mods/$m/main.js" ] && [ -f "$APP/mods/$m/mod.json" ]; } || printf '%s ' "$m"; done)
-check_eq "$faltan$(ls "$APP/mods" | grep -c '^bk$') $(ls "$APP/mods" | grep -cE '^bk-(aviso|seguir)$')" "0 2" "atajos: una carpeta con main.js y mod.json por cada tecla que abre un mod, más los dos sin tecla (bk-aviso, bk-seguir), y se va la versión anterior (mods/bk)"
+check_eq "$faltan$(listar "$APP/mods" | grep -c '^bk$') $(listar "$APP/mods" | grep -cE '^bk-(aviso|seguir)$')" "0 2" "atajos: una carpeta con main.js y mod.json por cada tecla que abre un mod, más los dos sin tecla (bk-aviso, bk-seguir), y se va la versión anterior (mods/bk)"
 check_eq "$(jq -r '.global["alt-s"] + " " + .global["alt-shift-3"] + " " + .global["alt-9"]' "$APP/keys.json")" "mod.open:bk-sessions mod.open:bk-agent3 mod.open:bk-go9" "atajos: suma las teclas alt+…; alt+N va a la ventana con ese número"
 check_eq "$(jq -r '.global["alt-k"] + " " + .global["cmd-t"] + " " + .terminal["cmd-c"]' "$APP/keys.json")" "tab.close tab.new terminal.copy" "atajos: no pisa una tecla que ya hace otra cosa ni las demás"
 check_eq "$(jq -r '.global["alt-g"] + " " + .global["alt-0"] + " " + (.global["alt-f9"] // "sin")' "$APP/keys.json")" "mod.open:bk-cambios mod.open:bk-last sin" "atajos: actualiza las teclas de la versión anterior de bk y saca la que ya no existe"
@@ -308,7 +327,7 @@ sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
 bk backend herdr >/dev/null 2>&1
 check_eq "$(cmp -s "$ROOT/herdr/mods/tareas/main.js" "$APP/mods/bk-tareas/main.js" && cmp -s "$ROOT/herdr/mods/lado/mod.json" "$APP/mods/bk-lado/mod.json" && cmp -s "$ROOT/herdr/mods/agentes/main.js" "$APP/mods/bk-agentes/main.js" && echo igual)" "igual" "paneles: copia agentes, tareas y lado a mods/bk-<nombre>"
 check_eq "$(cmp -s "$SRC" "$L" && echo igual) $(cat "$MARK")" "igual $(sha "$SRC")" "layout: instala bk-lavanda y anota qué instaló"
-check_eq "$(ls "$APP/layouts" | tr '\n' ' ') $(cat "$APP/layouts/main.json")" 'bk-lavanda.json bk-lavanda.svg main.json  {"id":"root"}' "layout: uno solo, con su vista previa, y no toca el main de Herdr"
+check_eq "$(listar "$APP/layouts" | tr '\n' ' ') $(cat "$APP/layouts/main.json")" 'bk-lavanda.json bk-lavanda.svg main.json  {"id":"root"}' "layout: uno solo, con su vista previa, y no toca el main de Herdr"
 # La vista previa: el layout la nombra en "preview" (una ruta dentro de la carpeta de Herdr). Se copia si falta o si
 # difiere. PV sale del layout y solo se lee; lo que el test escribe va a PVD, una ruta fija dentro del Herdr de prueba
 PV=$(jq -r '.preview // "sin-preview"' "$SRC"); PVS="$ROOT/herdr/layouts/bk-lavanda.svg"; PVD="$APP/layouts/bk-lavanda.svg"
@@ -318,7 +337,7 @@ check_eq "$(cmp -s "$PVS" "$PVD" && echo igual) $(has "$out" "layout bk-lavanda:
 # no se puede copiar (hay una carpeta con su nombre): avisa y lo que viene después, las teclas, se instala igual
 rm -f "$PVD"; mkdir "$PVD"; jq 'del(.global["alt-g"])' "$APP/keys.json" >"$TMP/k" && mv "$TMP/k" "$APP/keys.json"
 out=$(bk backend herdr 2>&1)
-check_eq "$(has "$out" "no pude copiar la vista previa") $(jq -r '.global["alt-g"]' "$APP/keys.json") $(ls "$APP/layouts" | grep -c 'tmp$')" "si mod.open:bk-cambios 0" "layout: si la vista previa no se puede copiar, avisa, no deja restos y el resto se instala igual"
+check_eq "$(has "$out" "no pude copiar la vista previa") $(jq -r '.global["alt-g"]' "$APP/keys.json") $(listar "$APP/layouts" | grep -c 'tmp$')" "si mod.open:bk-cambios 0" "layout: si la vista previa no se puede copiar, avisa, no deja restos y el resto se instala igual"
 rmdir "$PVD"; bk backend herdr >/dev/null 2>&1
 check_eq "$(cmp -s "$PVS" "$PVD" && echo igual)" "igual" "layout: cuando se puede de nuevo, la vista previa vuelve"
 check_eq "$(log | grep -c 'layout.switch')" "0" "layout: instalar no cambia el layout que se muestra"
@@ -334,8 +353,8 @@ check_eq "$(for f in bk-agentes/lista.js bk-agentes/editar.js bk-agentes/espacio
 sin_kit=$(grep -l 'from "./kit.js"' "$ROOT"/herdr/mods/*/main.js | while read -r f; do m=$(basename "$(dirname "$f")"); [ "$m" = hub ] || cmp -s "$ROOT/herdr/mods/$m/kit.js" "$APP/mods/bk-$m/kit.js" || printf '%s ' "$m"; done)
 check_eq "$(grep -l 'from "./kit.js"' "$ROOT"/herdr/mods/*/main.js | grep -vc '/hub/') $sin_kit" "6 " "kit.js: cada panel que lo importa lo tiene instalado en su carpeta"
 # Los temas de bk: se instalan, siguen al repo mientras nadie los retoque y no pisan uno tuyo
-T1=$(ls "$ROOT/herdr/themes" | head -1)
-check_eq "$(ls "$ROOT/herdr/themes" | while read -r f; do cmp -s "$ROOT/herdr/themes/$f" "$APP/themes/$f" || printf '%s ' "$f"; done)$(jq -r --arg f "$T1" '.[$f]' "$APP/bk-temas.json")" "$(sha "$ROOT/herdr/themes/$T1")" "temas: instala los de herdr/themes y anota qué instaló"
+T1=$(listar "$ROOT/herdr/themes" | head -1)
+check_eq "$(listar "$ROOT/herdr/themes" | while read -r f; do cmp -s "$ROOT/herdr/themes/$f" "$APP/themes/$f" || printf '%s ' "$f"; done)$(jq -r --arg f "$T1" '.[$f]' "$APP/bk-temas.json")" "$(sha "$ROOT/herdr/themes/$T1")" "temas: instala los de herdr/themes y anota qué instaló"
 echo '{"background":"#000000"}' >"$APP/themes/$T1"; jq --arg f "$T1" --arg s "$(sha "$APP/themes/$T1")" '.[$f] = $s' "$APP/bk-temas.json" >"$TMP/temas" && mv "$TMP/temas" "$APP/bk-temas.json"
 bk backend herdr >/dev/null 2>&1
 check_eq "$(cmp -s "$ROOT/herdr/themes/$T1" "$APP/themes/$T1" && echo igual)" "igual" "temas: una copia que bk instaló y nadie tocó se actualiza con la del repo"
@@ -400,24 +419,34 @@ check_eq "$(cd "$ROOT/lib" && ESCDELAY=300 python3 -c 'import os, sessions; prin
 # --- números fijos de ventana (bk.id), adopción de lo abierto desde Herdr y handoff pedido desde afuera ---
 rm -f "$HD_FAKE/state.json" "$STATE"/*.json; rm -rf "$BK_HANDOFF_DIR"; : >"$HD_FAKE/log"
 fake() { python3 "$HERE/herdr_fake.py" "$@"; }
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 idof() { st -r --arg t "$1" '.terms[$t].labels["bk.id"] // "sin"'; }
-newtab() { fake app do tab.new "$(jq -cn --arg s "$(st -r '.spaces[0].id')" --arg f "$REPO" --arg a "$1" '{space: $s, name: $a, folder: $f, argv: [$a]}')" | jq -r .terminal; }
+newtab() { fake app "do" tab.new "$(jq -cn --arg s "$(st -r '.spaces[0].id')" --arg f "$REPO" --arg a "$1" '{space: $s, name: $a, folder: $f, argv: [$a]}')" | jq -r .terminal; }
 (cd "$REPO" && bk >/dev/null 2>&1); (cd "$REPO" && bk chat >/dev/null 2>&1)
 check_eq "$(idof t1) $(idof t2)" "1 2" "número de ventana: cada chat toma al nacer el libre más chico"
 fake hc kill t1 >/dev/null; (cd "$REPO" && bk chat >/dev/null 2>&1)
 check_eq "$(idof t3)" "1" "número de ventana: el de una ventana que se cerró vuelve a estar libre"
 # un claude abierto desde Herdr (el + de las pestañas): sin etiquetas de bk, informa estado
 fst() { jq "$@" "$HD_FAKE/state.json" >"$TMP/st" && mv "$TMP/st" "$HD_FAKE/state.json"; }   # retocar el Herdr falso
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 informa() { fst --arg t "$1" '.terms[$t].status = {"app": "claude-code", "state": "idle"}'; }
 T4=$(newtab claude); informa "$T4"
 got=$(bk _adopt "$T4" 2>/dev/null)
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 check_eq "$got $(st -r --arg t "$T4" '.terms[$t].labels | .["bk.kind"] + " " + .["bk.project"] + " " + .["bk.win"] + " " + .["bk.id"]')" "3 chat proj proj 3" "adopción: un agente abierto desde Herdr pasa a ser un chat de su proyecto, con su número"
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 check_eq "$(bk _adopt "$T4" 2>/dev/null) $(st -r --arg t "$T4" '.terms[$t].labels["bk.win"]')" "3 proj" "adopción: repetirla no cambia ni el número ni el nombre"
 T5=$(newtab zsh); bk _adopt "$T5" >/dev/null 2>&1
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 check_eq "$(st -r --arg t "$T5" '.terms[$t] | .argv[0] + " " + (.labels["bk.kind"] // "sin") + " " + (.labels["bk.id"] // "sin")')" "zsh sin sin" "adopción: una shell (no informa estado) no se toca"
-T6=$(newtab claude); informa "$T6"; fst --arg t "$T6" 'del(.terms[$t].labels["herdr.tab"])'; bk _adopt "$T6" >/dev/null 2>&1
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
+T6=$(newtab claude); informa "$T6"
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
+fst --arg t "$T6" 'del(.terms[$t].labels["herdr.tab"])'; bk _adopt "$T6" >/dev/null 2>&1
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 check_eq "$(st -r --arg t "$T6" '.terms[$t] | .status.app + " " + (.labels["bk.kind"] // "sin") + " " + (.labels["bk.id"] // "sin")')" "claude-code sin sin" "adopción: un agente sin pestaña (un popup) no se toca"
 T7=$(newtab claude); informa "$T7"; bk _adopt "$T7" >/dev/null 2>&1
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 check_eq "$(st -r --arg t "$T7" '.terms[$t].labels | .["bk.win"] + " " + .["bk.id"]')" "proj-4 4" "adopción: si el nombre del proyecto ya es de otro chat, toma el primero libre (proj-4) y el número que sigue"
 : >"$HD_FAKE/log"; (cd "$REPO" && bk go 3 >/dev/null 2>&1)
 check_eq "$(log | grep -c "pane.focus {\"terminal\": \"$T4\"}")" "1" "bk go N: muestra la ventana con ese número fijo"
@@ -436,12 +465,17 @@ check_eq "$(log | grep -c '^hc send t2 .*handoff --pedido --sid sidB')" "1" "han
 # un agente abierto desde Herdr que la barra todavía no adoptó: handoff --term lo adopta y le pide el resumen
 T8=$(newtab claude); informa "$T8"; echo "{\"pane\": \"$T8\", \"state\": \"idle\"}" >"$STATE/sidE.json"; : >"$HD_FAKE/log"
 bk handoff --term "$T8" >/dev/null 2>&1
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 check_eq "$(log | grep -c "^hc send $T8 .*handoff --pedido --sid sidE") $(st -r --arg t "$T8" '.terms[$t].labels["bk.kind"] // "sin"')" "1 chat" "handoff --term: adopta una terminal que bk no conocía y le pide el resumen"
 # una terminal que se abrió en otra carpeta y después hizo cd al proyecto antes de abrir claude: la adopción y el
 # «De dónde» del resumen son de la carpeta de claude (foreground), no de la de la shell
-mkdir -p "$TMP/otra"; T9=$(newtab claude); informa "$T9"; fst --arg t "$T9" --arg o "$TMP/otra" --arg r "$REPO" '.terms[$t].cwd = $o | .terms[$t].fg_cwd = $r'
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
+mkdir -p "$TMP/otra"; T9=$(newtab claude); informa "$T9"
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
+fst --arg t "$T9" --arg o "$TMP/otra" --arg r "$REPO" '.terms[$t].cwd = $o | .terms[$t].fg_cwd = $r'
 bk _adopt "$T9" >/dev/null 2>&1
 PATH="$TMP/fake:$PATH" BK_BACKEND=herdr HC_TERMINAL_ID="$T9" "$ROOT/bin/bk" handoff --pedido --sid sidF >/dev/null 2>&1
+# shellcheck disable=SC2016  # jq: los $variables son de jq (--arg), no de bash
 check_eq "$(st -r --arg t "$T9" '.terms[$t].labels["bk.project"]') $(jq -r .cwd "$BK_HANDOFF_DIR/sidF.json" 2>/dev/null)" "proj $(cd "$REPO" && git rev-parse --show-toplevel)" "adopción y handoff --pedido: la carpeta de claude, no la de la shell de la terminal"
 # el agente escribe el resumen (bk handoff --pedido deja el .json; el hook corre --listo): abre el nuevo y cierra el viejo
 pedido() { PATH="$TMP/fake:$PATH" BK_BACKEND=herdr HC_TERMINAL_ID="$1" "$ROOT/bin/bk" handoff --pedido --sid "$2" >/dev/null 2>&1; echo "# resumen" >"$BK_HANDOFF_DIR/$2.md"; }

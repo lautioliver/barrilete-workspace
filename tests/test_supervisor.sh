@@ -44,7 +44,7 @@ real_now = sv.now
 sv.now = lambda: real_now() + timedelta(seconds=offset)
 sv.require_terminal = lambda action: None
 if not os.environ.get("SV_REAL_HUMAN"):    # el control del árbol de procesos se prueba aparte (SV_REAL_HUMAN=1)
-    sv.require_human = lambda action: None
+    sv.require_human = lambda action, run_id: None
 if os.environ.get("SV_SLOW"):        # agranda la ventana entre leer y escribir el estado
     import time
     real_write = sv.write_state

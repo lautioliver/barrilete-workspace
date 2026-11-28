@@ -138,4 +138,8 @@ tap_run out 0 python3 -c 'import os, sys; sys.path.insert(0, os.environ["HC_LIB"
 print(hc.human_only(["_do", "--"] * 70 + ["run", "1"]))'
 [ "$out" = "_do anidado" ]; tap_check $? "human_only da un nombre propio al pasar el tope de anidado" "got: $out"
 
+# #57: test_human_confirm.py (confirmación fail-closed, con backends falsos: nunca abre el diálogo real)
+tap_run out 0 python3 "$ROOT/scripts/agents/test_human_confirm.py"
+[ "$TAP_RC" = 0 ]; tap_check $? "test_human_confirm.py: sus pruebas pasan (sin diálogo real)" "rc=$TAP_RC"
+
 tap_done
