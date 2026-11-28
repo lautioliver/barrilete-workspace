@@ -853,7 +853,9 @@ say() {
   local tp; tp=$(win_pane "$win")
   [ -n "$tp" ] || die "no encuentro dónde corre ${win#chat:}"
   # #57: la persona confirma el destino resuelto antes de encolar o escribir. El mensaje no va al diálogo.
-  confirmar_humano "bk say" "$win"
+  # Un nombre de chat fuera del identificador validado se confirma por su terminal (t<n>), que sí lo cumple
+  local dest="$win"; case "$dest" in *[!A-Za-z0-9._:/-]*|"") dest="$tp" ;; esac
+  confirmar_humano "bk say" "$dest"
   # Trabajando (ADR-005 D8): se encola y el hook lo escribe cuando el agente termina el turno
   case "$win" in chat:*) ;; *)
     local td; td=$(python3 "$TASKS" find --window "$win" 2>/dev/null || true)
