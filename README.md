@@ -254,7 +254,8 @@ caída, así que la lista puede traer chats que cerraste a propósito: para eso 
 - `bk peek [ventana]`: la pantalla de un agente (sin ventana: las últimas líneas de todos).
 - `bk say <ventana> "…"`: escribe en su ventana como si fuera tu teclado; sirve para responder un menú o aprobar un plan.
   Corré `bk say` desde una terminal humana separada, fuera del chat o la sesión del agente. Los guardrails bloquean el
-  comando dentro de herramientas de agentes y el CLI verifica el proceso que lo invoca.
+  comando dentro de herramientas de agentes (también dentro de `bk _do` y `bk _do_run`) y el CLI verifica el proceso
+  que lo invoca.
 - `bk watch [ventana]`: espejo en vivo de un agente; sin ventana toma el próximo libre.
 - `bk fix <pr> "instrucción"`: implementer sobre la rama de un PR abierto, reusando su worktree.
 
@@ -594,7 +595,9 @@ tema está en el encabezado de `lib/herdr_hub.py`.
 con la salida en `~/.cache/bk/hub/do/<fecha>-<pid>.log`, y vuelve en el acto con `{"ok": true, "log": …}`. Al
 terminar deja un aviso de Herdr con la última línea de la salida: `success` si salió con 0, `error` si no (si esa
 línea es un JSON, como el de `bk _hub session-go`, el aviso lo dice en palabras). Con `--dry-run` dice qué
-correría y no deja log ni aviso. Los avisos de bk (`hd_notice`) van a una cola, un archivo por aviso en
+correría y no deja log ni aviso. Lo que es de una persona (`say`, `approve`, `supervisor approve|cancel`, también
+dentro de otro `_do` o `_do_run`) se chequea antes de soltarlo, con el proceso que pidió `bk _do`: desde un agente se
+niega; desde Herdr (el botón de aprobar del hub) se lanza. Los avisos de bk (`hd_notice`) van a una cola, un archivo por aviso en
 `~/.cache/bk/herdr-avisos/`, para que dos casi juntos no se pisen; `~/.cache/bk/herdr-aviso.json` sigue quedando
 con el último. El mod `bk-aviso` muestra la cola en orden, cada aviso con su nivel (uno de error queda 15 s a la
 vista, el resto 5 s; el que abre un mod con el clic, diez minutos), y la vacía; uno de hace más de diez minutos
